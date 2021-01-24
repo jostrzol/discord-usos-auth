@@ -353,6 +353,9 @@ func guildCreateHandler(s *discordgo.Session, e *discordgo.GuildCreate) {
 func readyHandler(s *discordgo.Session, e *discordgo.Ready) {
 	log.Println("Ready")
 	for _, guild := range e.Guilds {
-		scanGuild(s, guild.ID)
+		err := scanGuild(s, guild.ID)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
