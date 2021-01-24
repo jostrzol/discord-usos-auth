@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Ogurczak/discord-usos-auth/usos"
 
@@ -153,6 +154,7 @@ func logDiscord(s *discordgo.Session, text string) error {
 }
 
 func sendAuthorizationInstructions(s *discordgo.Session, member *discordgo.Member, tokenURL *url.URL) error {
+	time.Sleep(time.Second)
 	channel, err := s.UserChannelCreate(member.User.ID)
 	if err != nil {
 		return err
