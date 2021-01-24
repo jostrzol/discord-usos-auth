@@ -2,6 +2,7 @@ package usos
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/dghubble/oauth1"
 )
@@ -69,7 +70,7 @@ func NewUsosUser(token *oauth1.Token) (*User, error) {
 		return nil, err
 	}
 
-	// fmt.Printf("Raw Response Body:\n%v\n", string(body))
+	fmt.Printf("Raw Response Body:\n%v\n", string(body))
 
 	tmp := tmpUser{}
 	err = json.Unmarshal(body, &tmp)
