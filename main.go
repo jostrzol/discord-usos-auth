@@ -11,14 +11,14 @@ import (
 	"github.com/Ogurczak/discord-usos-auth/usos"
 )
 
-var programmeID string
+var programmeName string
 var botToken string
 var logUserID string
 var logChannelID string
 
 func filterFunc(u *usos.User) (bool, error) {
 	for _, prog := range u.Programmes {
-		if prog.ID == programmeID {
+		if prog.Name == programmeName {
 			return true, nil
 		}
 	}
@@ -28,7 +28,7 @@ func filterFunc(u *usos.User) (bool, error) {
 func init() {
 
 	flag.StringVar(&botToken, "t", "", "Bot Token")
-	flag.StringVar(&programmeID, "p", "", "Desired Programme ID")
+	flag.StringVar(&programmeName, "p", "", "Desired Programme ID")
 	flag.StringVar(&logUserID, "l", "", "ID of a user to send authorization data to")
 	flag.StringVar(&logChannelID, "c", "", "ID of a channel to send authorization data to (has priority vs user log)")
 	flag.Parse()
