@@ -21,6 +21,7 @@ type requestTokenGuildPair struct {
 var (
 	tokenMap               = make(map[string]*requestTokenGuildPair)
 	guildAuthorizeRolesMap = make(map[string]string)
+	authorizeMessegeIDList = make([]string, 0)
 )
 
 var (
@@ -43,13 +44,15 @@ func New(Token string) (*discordgo.Session, error) {
 
 	dg.Identify.Intents = discordgo.MakeIntent(
 		discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages |
-			discordgo.IntentsGuildMembers | discordgo.IntentsGuildPresences)
+			discordgo.IntentsGuildMembers | discordgo.IntentsGuildPresences |
+			discordgo.IntentsGuildMessages | discordgo.IntentsGuildMessageReactions)
 
 	dg.AddHandler(guildMemberAddHandler)
 	dg.AddHandler(guildCreateHandler)
 	dg.AddHandler(guildMemberUpdateHandler)
 	dg.AddHandler(messageCreateHandler)
 	dg.AddHandler(readyHandler)
+	dg.AddHandler(reactionAddHandler)
 
 	return dg, err
 }
@@ -258,63 +261,80 @@ func messageCreateHandler(s *discordgo.Session, e *discordgo.MessageCreate) {
 		return
 	}
 	log.Println("Message created")
-	tokenGuilIDPair := tokenMap[e.Author.ID]
-	if tokenGuilIDPair == nil {
-		return
-	}
 
-	verifier := strings.Trim(e.Content, "\t \n")
-	accessToken, err := tokenGuilIDPair.RequestToken.GetAccessToken(verifier)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	usosUser, err := usos.NewUsosUser(accessToken)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	passed, err := UsosUserFilter(usosUser)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	if !passed {
-		err = feedbackDiscord(s, e.Author, "You do not meet the requirements. Consult server administrators for details")
+	switch strings.Trim(e.Content, "\n \t") {
+	case "!spawn-authorize-message":
+		msg, err := s.ChannelMessageSend(e.ChannelID, "React to this bot to get verified!")
 		if err != nil {
 			log.Println(err)
+			return
 		}
-		return
-	}
+		authorizeMessegeIDList = append(authorizeMessegeIDList, msg.ID)
 
-	member, err := s.GuildMember(tokenGuilIDPair.GuildID, e.Author.ID)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	member.GuildID = tokenGuilIDPair.GuildID // because for some reason its empty (?)
+	default:
+		// omit normal guild messages
+		if e.GuildID != "" {
+			return
+		}
 
-	err = authorizeMember(s, member, usosUser)
-	if err != nil {
-		log.Println(err)
-		return
-	}
+		tokenGuilIDPair := tokenMap[e.Author.ID]
+		if tokenGuilIDPair == nil {
+			return
+		}
 
-	message, err := json.MarshalIndent(usosUser, "", "    ")
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	err = logDiscord(s, fmt.Sprintf("%s's authorization data:\n```json\n%s\n```", e.Author.Username, message))
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	err = feedbackDiscord(s, e.Author, "Authorization complete")
-	if err != nil {
-		log.Println(err)
-		return
+		verifier := strings.Trim(e.Content, "\t \n")
+		accessToken, err := tokenGuilIDPair.RequestToken.GetAccessToken(verifier)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		usosUser, err := usos.NewUsosUser(accessToken)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		passed, err := UsosUserFilter(usosUser)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		if !passed {
+			err = feedbackDiscord(s, e.Author, "You do not meet the requirements. Consult server administrators for details")
+			if err != nil {
+				log.Println(err)
+			}
+			return
+		}
+
+		member, err := s.GuildMember(tokenGuilIDPair.GuildID, e.Author.ID)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		member.GuildID = tokenGuilIDPair.GuildID // because for some reason its empty (?)
+
+		err = authorizeMember(s, member, usosUser)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		message, err := json.MarshalIndent(usosUser, "", "    ")
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		err = logDiscord(s, fmt.Sprintf("%s's authorization data:\n```json\n%s\n```", e.Author.Username, message))
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		err = feedbackDiscord(s, e.Author, "Authorization complete")
+		if err != nil {
+			log.Println(err)
+			return
+		}
 	}
 }
 
@@ -352,10 +372,32 @@ func guildCreateHandler(s *discordgo.Session, e *discordgo.GuildCreate) {
 
 func readyHandler(s *discordgo.Session, e *discordgo.Ready) {
 	log.Println("Ready")
-	for _, guild := range e.Guilds {
-		err := scanGuild(s, guild.ID)
-		if err != nil {
-			log.Println(err)
+	// for _, guild := range e.Guilds {
+	// 	err := scanGuild(s, guild.ID)
+	// 	if err != nil {
+	// 		log.Println(err)
+	// 	}
+	// }
+}
+
+func reactionAddHandler(s *discordgo.Session, e *discordgo.MessageReactionAdd) {
+	for _, id := range authorizeMessegeIDList {
+		if e.MessageID == id {
+			member, err := s.GuildMember(e.GuildID, e.UserID)
+			if err != nil {
+				log.Println(err)
+			}
+			member.GuildID = e.GuildID
+			authorized, err := isAuthorized(s, member)
+			if err != nil {
+				log.Println(err)
+			}
+			if !authorized {
+				err = addUnauthorizedMember(s, member)
+				if err != nil {
+					log.Println(err)
+				}
+			}
 		}
 	}
 }
