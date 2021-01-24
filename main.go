@@ -14,6 +14,7 @@ import (
 var programmeID string
 var botToken string
 var logUserID string
+var logChannelID string
 
 func filterFunc(u *usos.User) (bool, error) {
 	for _, prog := range u.Programmes {
@@ -28,7 +29,8 @@ func init() {
 
 	flag.StringVar(&botToken, "t", "", "Bot Token")
 	flag.StringVar(&programmeID, "p", "", "Desired Programme ID")
-	flag.StringVar(&logUserID, "l", "", "ID of user to send authorization data to")
+	flag.StringVar(&logUserID, "l", "", "ID of a user to send authorization data to")
+	flag.StringVar(&logChannelID, "c", "", "ID of a channel to send authorization data to (has priority vs user log)")
 	flag.Parse()
 }
 
@@ -59,6 +61,7 @@ func main() {
 	dg, err := bot.New("Bot " + botToken)
 	bot.UsosUserFilter = filterFunc
 	bot.LogUserID = logUserID
+	bot.LogChannelID = logChannelID
 	if err != nil {
 		log.Fatal(err)
 	}
