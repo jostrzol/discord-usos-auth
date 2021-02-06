@@ -58,15 +58,15 @@ func main() {
 	// }
 	// _ = user
 
-	dg, err := bot.New("Bot " + botToken)
-	bot.UsosUserFilter = filterFunc
-	bot.LogUserID = logUserID
-	bot.LogChannelID = logChannelID
+	b, err := bot.New("Bot " + botToken)
+	b.UsosUserFilter = filterFunc
+	b.LogUserID = logUserID
+	b.LogChannelID = logChannelID
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = dg.Open()
+	err = b.Open()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -75,5 +75,5 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 
-	dg.Close()
+	b.Close()
 }
