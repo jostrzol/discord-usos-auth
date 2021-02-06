@@ -9,6 +9,22 @@ import (
 	"github.com/dghubble/oauth1"
 )
 
+// ErrUnableToCall represents an error which took place during calling an usos-api method
+type ErrUnableToCall struct {
+	cause error
+}
+
+// newErrUnableToCall returns a pointer to a new ErrUnableToCall
+func newErrUnableToCall(cause error) *ErrUnableToCall {
+	return &ErrUnableToCall{
+		cause: cause,
+	}
+}
+
+func (e *ErrUnableToCall) Error() string {
+	return "Error during calling an usos-api method"
+}
+
 func usosURL(key string) string {
 	var baseURL = "https://apps.usos.pw.edu.pl/"
 
@@ -67,7 +83,7 @@ func makeCall(client *http.Client, key string, a ...interface{}) ([]byte, error)
 	url := fmt.Sprintf(usosURL(key), a...)
 	resp, err := client.Get(url)
 	if err != nil {
-		return nil, err
+		return nil, newErrUnableToCall(err)
 	}
 	defer resp.Body.Close()
 
