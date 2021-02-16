@@ -4,69 +4,53 @@ import (
 	"log"
 	"strings"
 
-	"github.com/Ogurczak/discord-usos-auth/usos"
+	"github.com/Ogurczak/discord-usos-auth/bot/commands"
 	"github.com/bwmarrin/discordgo"
 )
 
 // messageCreateHandler handles messeges received by the bot
-func messageCreateHandler(bot *UsosBot, e *discordgo.MessageCreate) {
+func (bot *UsosBot) messageCreateHandler(session *discordgo.Session, e *discordgo.MessageCreate) {
 	// ignore self
 	if e.Author.ID == bot.State.User.ID {
 		return
 	}
-	log.Println("Message created")
 
-	trimmedMsg := strings.Trim(e.Content, "\n \t")
+	if strings.Fields(e.Content)[0] != "!usos" {
+		return
+	}
+	log.Println("Command received")
 
-	switch trimmedMsg {
-	case "!spawn-authorize-message":
-		bot.spawnAuthorizeMessage(e.ChannelID)
-	default:
-		// ignore normal guild messages
-		if e.GuildID != "" {
+	parser, err := bot.setupCommandParser()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	err = parser.Parse(e)
+	_, isParseError := err.(*commands.ErrParse)
+	if err != nil && !isParseError {
+		log.Println(err)
+		return
+	}
+
+	if !parser.ParsedHelp() && err == nil {
+		err = parser.Handle(e)
+		_, isHandleError := err.(*commands.ErrInCommandHandler)
+		_, isScopeError := err.(*commands.ErrCommandInWrongScope)
+		if err != nil && !isHandleError && !isScopeError {
+			log.Println(err)
 			return
 		}
-
-		err := bot.finalizeAuthorization(e.Author, trimmedMsg)
-		if err != nil {
-			switch err.(type) {
-			case *ErrUnregisteredUnauthorizedUser:
-				err = bot.privMsgDiscord(e.Author.ID, "You must first register for authorization by adding reaction to the bot's message on a server.")
-				if err != nil {
-					log.Println(err)
-				}
-			case *ErrFilteredOut:
-				err = bot.privMsgDiscord(e.Author.ID, "You do not meet the requirements. Consult server administrators for details.")
-				if err != nil {
-					log.Println(err)
-				}
-			case *usos.ErrUnableToCall:
-				err = bot.privMsgDiscord(e.Author.ID, "Cannot make call for required information to usos-api. Probably the verifier is wrong")
-				if err != nil {
-					log.Println(err)
-				}
-
-			default:
-				log.Println(err)
-			}
-		}
-
 	}
 }
 
 // readyHandler indicates that the bot is ready
-func readyHandler(bot *UsosBot, e *discordgo.Ready) {
+func (bot *UsosBot) readyHandler(session *discordgo.Session, e *discordgo.Ready) {
 	log.Println("Ready")
-	// for _, guild := range e.Guilds {
-	// 	err := scanGuild(s, guild.ID)
-	// 	if err != nil {
-	// 		log.Println(err)
-	// 	}
-	// }
 }
 
 // reactionAddHandler handles reactions added to bot's messages
-func reactionAddHandler(bot *UsosBot, e *discordgo.MessageReactionAdd) {
+func (bot *UsosBot) reactionAddHandler(session *discordgo.Session, e *discordgo.MessageReactionAdd) {
 	for _, id := range bot.authorizeMessegeIDList {
 		if e.MessageID == id {
 			member, err := bot.GuildMember(e.GuildID, e.UserID)

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"log"
 	"os"
 	"os/signal"
@@ -9,16 +8,15 @@ import (
 
 	"github.com/Ogurczak/discord-usos-auth/bot"
 	"github.com/Ogurczak/discord-usos-auth/usos"
+	"github.com/akamensky/argparse"
 )
 
-var programmeName string
-var botToken string
-var logUserID string
-var logChannelID string
+var programmeName *string
+var botToken *string
 
 func filterFunc(u *usos.User) (bool, error) {
 	for _, prog := range u.Programmes {
-		if prog.Name == programmeName {
+		if prog.Name == *programmeName {
 			return true, nil
 		}
 	}
@@ -26,12 +24,13 @@ func filterFunc(u *usos.User) (bool, error) {
 }
 
 func init() {
-
-	flag.StringVar(&botToken, "t", "", "Bot Token")
-	flag.StringVar(&programmeName, "p", "", "Desired Programme ID")
-	flag.StringVar(&logUserID, "l", "", "ID of a user to send authorization data to")
-	flag.StringVar(&logChannelID, "c", "", "ID of a channel to send authorization data to (has priority vs user log)")
-	flag.Parse()
+	parser := argparse.NewParser("discord-usos-auth", "Runs an Usos Authorization Bot instance using the given bot token")
+	botToken = parser.String("t", "token", &argparse.Options{Required: true, Help: "bot token"})
+	programmeName = parser.String("p", "programme", &argparse.Options{Required: true, Help: "student programme to filter through"})
+	err := parser.Parse(os.Args)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func main() {
@@ -58,10 +57,8 @@ func main() {
 	// }
 	// _ = user
 
-	b, err := bot.New("Bot " + botToken)
+	b, err := bot.New("Bot " + *botToken)
 	b.UsosUserFilter = filterFunc
-	b.LogUserID = logUserID
-	b.LogChannelID = logChannelID
 	if err != nil {
 		log.Fatal(err)
 	}
