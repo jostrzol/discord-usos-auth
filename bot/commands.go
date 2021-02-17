@@ -14,6 +14,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	parser := commands.NewDiscordParser("!usos", "Execute the Usos Authrization Bot's discord commands", bot.Session)
 
 	authMsgCmd := parser.NewCommand("auth-msg", "Spawn a message which upon being reacted to begins the process of usos authentication")
+	authMsgCmd.SetPrivilagesRequired(true)
 	err := authMsgCmd.SetScope(commands.ScopeGuild)
 	if err != nil {
 		return nil, err
@@ -52,6 +53,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	}
 
 	logChannelCmd := parser.NewCommand("log", "manage discord log channels")
+	logChannelCmd.SetPrivilagesRequired(true)
 
 	addLogChannelCmd := logChannelCmd.NewCommand("add", "Add a new log channel to this server")
 	err = addLogChannelCmd.SetScope(commands.ScopeGuild)

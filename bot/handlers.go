@@ -37,7 +37,8 @@ func (bot *UsosBot) messageCreateHandler(session *discordgo.Session, e *discordg
 		err = parser.Handle(e)
 		_, isHandleError := err.(*commands.ErrInCommandHandler)
 		_, isScopeError := err.(*commands.ErrCommandInWrongScope)
-		if err != nil && !isHandleError && !isScopeError {
+		_, isPrivilageError := err.(*commands.ErrUnprivilaged)
+		if err != nil && !isHandleError && !isScopeError && !isPrivilageError {
 			log.Println(err)
 			return
 		}

@@ -25,9 +25,11 @@ type DiscordCommand struct {
 	// Handler is the function executed during parsing this command
 	Handler func(*DiscordCommand, *discordgo.MessageCreate) *ErrInCommandHandler
 
-	session  *discordgo.Session
-	commands []*DiscordCommand
-	scope    CommandScope
+	session            *discordgo.Session
+	commands           []*DiscordCommand
+	scope              CommandScope
+	privilagesRequired bool
+	parent             *DiscordCommand
 }
 
 // NewDiscordParser returns a new instance of DiscordParser Class
@@ -80,6 +82,23 @@ func (parser *DiscordParser) Handle(e *discordgo.MessageCreate) error {
 	// set youngest command
 	cmd := parser.youngestCommandHappened()
 
+	// validate privilages
+	if cmd.PrivilagesRequired() {
+		isPrivilaged, err := cmd.IsPrivilaged(e)
+		if err != nil {
+			return err
+		}
+		if !isPrivilaged {
+			privilageErr := newErrUnprivilaged(e, cmd)
+			message := cmd.Usage(privilageErr.Error())
+			_, err := parser.session.ChannelMessageSend(e.ChannelID, message)
+			if err != nil {
+				return err
+			}
+			return privilageErr
+		}
+	}
+
 	// validate scopes
 	var scopeErr error
 	if e.GuildID == "" {
@@ -129,7 +148,11 @@ func (parser *DiscordParser) ParsedHelp() bool {
 func (command *DiscordCommand) NewCommand(name string, description string) *DiscordCommand {
 	argparseCommand := command.Command.NewCommand(name, description)
 	newCommand := newDiscordCommand(argparseCommand, command.session)
+
+	// set relations
+	newCommand.parent = command
 	command.commands = append(command.commands, newCommand)
+
 	return newCommand
 }
 
@@ -213,4 +236,51 @@ func (command *DiscordCommand) Usage(msg interface{}) string {
 		prefix = ""
 	}
 	return prefix + utils.DiscordCodeBlock(command.Command.Usage(nil), "")
+}
+
+// GetParent exposes Command's parent field
+func (command *DiscordCommand) GetParent() *DiscordCommand {
+	return command.parent
+}
+
+// PrivilagesRequired indicates if privilages are required to execute this command
+func (command *DiscordCommand) PrivilagesRequired() bool {
+	if command.privilagesRequired {
+		return true
+	}
+	if command.GetParent() != nil {
+		return command.GetParent().PrivilagesRequired()
+	}
+	return false
+}
+
+// SetPrivilagesRequired sets the preivilage level for this command
+func (command *DiscordCommand) SetPrivilagesRequired(b bool) {
+	command.privilagesRequired = b
+}
+
+// IsPrivilaged checks if a given message is privilaged for this command
+func (command *DiscordCommand) IsPrivilaged(e *discordgo.MessageCreate) (bool, error) {
+	member, err := command.session.GuildMember(e.GuildID, e.Author.ID)
+	if err != nil {
+		return false, err
+	}
+	roles, err := command.session.GuildRoles(e.GuildID)
+	if err != nil {
+		return false, err
+	}
+
+	rolesMap := make(map[string]*discordgo.Role)
+	for _, role := range roles {
+		rolesMap[role.ID] = role
+	}
+
+	for _, roleID := range member.Roles {
+		perms := rolesMap[roleID].Permissions
+		if perms&discordgo.PermissionManageServer == discordgo.PermissionManageServer ||
+			perms&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
+			return true, nil
+		}
+	}
+	return false, nil
 }

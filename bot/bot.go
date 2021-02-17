@@ -22,11 +22,6 @@ type requestTokenGuildPair struct {
 type UsosBot struct {
 	*discordgo.Session
 
-	// UserRolesFunction is used to determine additional roles given upon authorization
-	UserRolesFunction func(*usos.User) ([]*discordgo.Role, error)
-	// UsosUserFilter is used to filter which users to authorize, every authorized user passes if undefined
-	UsosUserFilter func(*usos.User) (bool, error)
-
 	tokenMap               map[string]*requestTokenGuildPair
 	guildAuthorizeRolesMap map[string]string
 	authorizeMessegeIDList []string
@@ -123,12 +118,13 @@ func (bot *UsosBot) authorizeMember(member *discordgo.Member, usosUser *usos.Use
 		}
 	}
 
-	if bot.UserRolesFunction != nil && usosUser != nil {
-		roles, err = bot.UserRolesFunction(usosUser)
-		if err != nil {
-			return err
-		}
-	}
+	// TODO: automatic roles assignment
+	// if bot.UserRolesFunction != nil && usosUser != nil {
+	// 	roles, err = bot.UserRolesFunction(usosUser)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
 	roles = append(roles, authorizeRole)
 
 	for _, role := range roles {
@@ -256,15 +252,16 @@ func (bot *UsosBot) finalizeAuthorization(user *discordgo.User, verifier string)
 			return err
 		}
 	}
-	if bot.UsosUserFilter != nil {
-		passed, err := bot.UsosUserFilter(usosUser)
-		if err != nil {
-			return err
-		}
-		if !passed {
-			return newErrFilteredOut(user.ID)
-		}
-	}
+	// TODO: usos user filter
+	// if bot.UsosUserFilter != nil {
+	// 	passed, err := bot.UsosUserFilter(usosUser)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	if !passed {
+	// 		return newErrFilteredOut(user.ID)
+	// 	}
+	// }
 
 	member, err := bot.GuildMember(tokenGuilIDPair.GuildID, user.ID)
 	if err != nil {

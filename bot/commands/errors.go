@@ -2,6 +2,8 @@ package commands
 
 import (
 	"fmt"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 // ErrIncorrectCommandScope represtents failure in setting a command scope to one not defined
@@ -66,4 +68,20 @@ func newErrParse(err error) *ErrParse {
 	return &ErrParse{
 		error: err,
 	}
+}
+
+// ErrUnprivilaged represtents failure in executing a command due to insufficient privilages of the user
+type ErrUnprivilaged struct {
+	Message *discordgo.MessageCreate
+	Command *DiscordCommand
+}
+
+func newErrUnprivilaged(Message *discordgo.MessageCreate, Command *DiscordCommand) *ErrUnprivilaged {
+	return &ErrUnprivilaged{
+		Message: Message,
+		Command: Command,
+	}
+}
+func (e *ErrUnprivilaged) Error() string {
+	return "You are unprivilaged for this command"
 }

@@ -58,7 +58,7 @@ func main() {
 	// _ = user
 
 	b, err := bot.New("Bot " + *botToken)
-	b.UsosUserFilter = filterFunc
+	// b.UsosUserFilter = filterFunc
 	if err != nil {
 		log.Fatal(err)
 	}
