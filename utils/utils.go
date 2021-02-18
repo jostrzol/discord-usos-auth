@@ -16,3 +16,8 @@ func DiscordCodeSpan(msg interface{}) string {
 func DiscordBold(msg interface{}) string {
 	return fmt.Sprintf("**%s**", msg)
 }
+
+// BitmaskCheck checks if the given value contains bits in the given mask
+func BitmaskCheck(value int64, mask int64) bool {
+	return value&mask == mask
+}

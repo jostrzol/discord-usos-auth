@@ -4,6 +4,20 @@ import (
 	"github.com/Ogurczak/discord-usos-auth/usos"
 )
 
+// ErrAlreadyUnregisteredUser represtents failure in
+type ErrAlreadyUnregisteredUser struct {
+	UserID string
+}
+
+func newErrAlreadyUnregisteredUser(UserID string) *ErrAlreadyUnregisteredUser {
+	return &ErrAlreadyUnregisteredUser{
+		UserID: UserID,
+	}
+}
+func (e *ErrAlreadyUnregisteredUser) Error() string {
+	return "You were not registered for authorization."
+}
+
 // ErrUnregisteredUnauthorizedUser represents failure in authorization of unregistered user
 type ErrUnregisteredUnauthorizedUser struct {
 	UserID string
@@ -94,4 +108,36 @@ func newErrLogChannelNotAdded(ChannelID string) *ErrLogChannelNotAdded {
 }
 func (e *ErrLogChannelNotAdded) Error() string {
 	return "This log channel is not on the log channel list"
+}
+
+// ErrLogChannelNotInGuild represtents failure in adding a new log channel due to it not belonging to the server
+type ErrLogChannelNotInGuild struct {
+	ChannelID string
+	GuildID   string
+}
+
+func newErrLogChannelNotInGuild(ChannelID string, GuildID string) *ErrLogChannelNotInGuild {
+	return &ErrLogChannelNotInGuild{
+		ChannelID: ChannelID,
+		GuildID:   GuildID,
+	}
+}
+func (e *ErrLogChannelNotInGuild) Error() string {
+	return "Ths log channel does not belog to the server"
+}
+
+// ErrRoleNotInGuild represtents failure in setting a role to one outside of guild
+type ErrRoleNotInGuild struct {
+	RoleID  string
+	GuildID string
+}
+
+func newErrRoleNotInGuild(RoleID string, GuildID string) *ErrRoleNotInGuild {
+	return &ErrRoleNotInGuild{
+		RoleID:  RoleID,
+		GuildID: GuildID,
+	}
+}
+func (e *ErrRoleNotInGuild) Error() string {
+	return "This role does not belong to this server"
 }

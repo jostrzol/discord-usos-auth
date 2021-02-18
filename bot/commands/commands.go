@@ -23,7 +23,7 @@ type DiscordCommand struct {
 	*argparse.Command
 
 	// Handler is the function executed during parsing this command
-	Handler func(*DiscordCommand, *discordgo.MessageCreate) *ErrInCommandHandler
+	Handler func(*DiscordCommand, *discordgo.MessageCreate) *ErrHandler
 
 	session            *discordgo.Session
 	commands           []*DiscordCommand
@@ -82,6 +82,22 @@ func (parser *DiscordParser) Handle(e *discordgo.MessageCreate) error {
 	// set youngest command
 	cmd := parser.youngestCommandHappened()
 
+	// validate scopes
+	var scopeErr error
+	if e.GuildID == "" {
+		scopeErr = cmd.validateScope(ScopePrivate)
+	} else {
+		scopeErr = cmd.validateScope(ScopeGuild)
+	}
+	if scopeErr != nil {
+		message := cmd.Usage(scopeErr.Error())
+		_, err := parser.session.ChannelMessageSend(e.ChannelID, message)
+		if err != nil {
+			return err
+		}
+		return scopeErr
+	}
+
 	// validate privilages
 	if cmd.PrivilagesRequired() {
 		isPrivilaged, err := cmd.IsPrivilaged(e)
@@ -97,22 +113,6 @@ func (parser *DiscordParser) Handle(e *discordgo.MessageCreate) error {
 			}
 			return privilageErr
 		}
-	}
-
-	// validate scopes
-	var scopeErr error
-	if e.GuildID == "" {
-		scopeErr = cmd.validateScope(ScopePrivate)
-	} else {
-		scopeErr = cmd.validateScope(ScopeGuild)
-	}
-	if scopeErr != nil {
-		message := cmd.Usage(scopeErr.Error())
-		_, err := parser.session.ChannelMessageSend(e.ChannelID, message)
-		if err != nil {
-			return err
-		}
-		return scopeErr
 	}
 
 	// execute handlers
@@ -163,7 +163,7 @@ func newDiscordCommand(command *argparse.Command, session *discordgo.Session) *D
 		commands: make([]*DiscordCommand, 0),
 		session:  session,
 		scope:    maxScope,
-		Handler:  func(cmd *DiscordCommand, e *discordgo.MessageCreate) *ErrInCommandHandler { return nil },
+		Handler:  func(cmd *DiscordCommand, e *discordgo.MessageCreate) *ErrHandler { return nil },
 	}
 	discordCommand.ExitOnHelp(false)
 	return discordCommand
@@ -261,6 +261,21 @@ func (command *DiscordCommand) SetPrivilagesRequired(b bool) {
 
 // IsPrivilaged checks if a given message is privilaged for this command
 func (command *DiscordCommand) IsPrivilaged(e *discordgo.MessageCreate) (bool, error) {
+	// private always privilaged
+	if e.GuildID == "" {
+		return true, nil
+	}
+
+	// is owner
+	guild, err := command.session.Guild(e.GuildID)
+	if err != nil {
+		return false, err
+	}
+	if guild.OwnerID == e.Author.ID {
+		return true, nil
+	}
+
+	// get roles
 	member, err := command.session.GuildMember(e.GuildID, e.Author.ID)
 	if err != nil {
 		return false, err
@@ -275,10 +290,11 @@ func (command *DiscordCommand) IsPrivilaged(e *discordgo.MessageCreate) (bool, e
 		rolesMap[role.ID] = role
 	}
 
+	// is administrator or has manage server permissions
 	for _, roleID := range member.Roles {
 		perms := rolesMap[roleID].Permissions
-		if perms&discordgo.PermissionManageServer == discordgo.PermissionManageServer ||
-			perms&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
+		if utils.BitmaskCheck(perms, discordgo.PermissionManageServer) ||
+			utils.BitmaskCheck(perms, discordgo.PermissionAdministrator) {
 			return true, nil
 		}
 	}

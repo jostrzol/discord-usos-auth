@@ -18,14 +18,18 @@ type requestTokenGuildPair struct {
 	GuildID      string
 }
 
+type guildUsosInfo struct {
+	authorizeRoleID string
+	logChannelIDs   map[string]bool
+}
+
 // UsosBot represents a session of usos authorization bot
 type UsosBot struct {
 	*discordgo.Session
 
 	tokenMap               map[string]*requestTokenGuildPair
-	guildAuthorizeRolesMap map[string]string
 	authorizeMessegeIDList []string
-	logChannelIDMap        map[string]map[string]bool
+	guildUsosInfos         map[string]*guildUsosInfo
 }
 
 // New creates a new session of usos authorization bot
@@ -44,9 +48,8 @@ func New(Token string) (*UsosBot, error) {
 		Session: session,
 
 		tokenMap:               make(map[string]*requestTokenGuildPair),
-		guildAuthorizeRolesMap: make(map[string]string),
 		authorizeMessegeIDList: make([]string, 0),
-		logChannelIDMap:        make(map[string]map[string]bool),
+		guildUsosInfos:         make(map[string]*guildUsosInfo),
 	}
 
 	bot.AddHandler(bot.messageCreateHandler)
@@ -56,11 +59,22 @@ func New(Token string) (*UsosBot, error) {
 	return bot, err
 }
 
-// registerUnauthorizedMember creates a new oauth token bound to the given member
+// getGuildUsosInfo gives access to guild's usos info
+func (bot *UsosBot) getGuildUsosInfo(guildID string) *guildUsosInfo {
+	if bot.guildUsosInfos[guildID] == nil {
+		bot.guildUsosInfos[guildID] = &guildUsosInfo{
+			logChannelIDs: make(map[string]bool),
+		}
+		return bot.guildUsosInfos[guildID]
+	}
+	return bot.guildUsosInfos[guildID]
+}
+
+// addUnauthorizedMember creates a new oauth token bound to the given member
 // and sends authorization instructions to that member
-func (bot *UsosBot) registerUnauthorizedMember(m *discordgo.Member) error {
+func (bot *UsosBot) addUnauthorizedMember(m *discordgo.Member) error {
 	if bot.tokenMap[m.User.ID] != nil {
-		return nil
+		return newErrAlreadyRegistered(m.User.ID, bot.tokenMap[m.User.ID])
 	}
 	token, err := usos.NewRequestToken()
 	if err != nil {
@@ -77,17 +91,13 @@ func (bot *UsosBot) registerUnauthorizedMember(m *discordgo.Member) error {
 	return nil
 }
 
-// createAuthorizeRole creates an authorize role in the given guild
-func (bot *UsosBot) createAuthorizeRole(GuildID string) (*discordgo.Role, error) {
-	authorizeRole, err := bot.GuildRoleCreate(GuildID)
-	if err != nil {
-		return nil, err
+// removeUnauthorizedUser removes an user from authorization list
+func (bot *UsosBot) removeUnauthorizedUser(userID string) error {
+	if _, exists := bot.tokenMap[userID]; !exists {
+		return newErrAlreadyUnregisteredUser(userID)
 	}
-	authorizeRole, err = bot.GuildRoleEdit(GuildID, authorizeRole.ID, "authorized", 0, false, 0, true)
-	if err != nil {
-		return nil, err
-	}
-	return authorizeRole, nil
+	delete(bot.tokenMap, userID)
+	return nil
 }
 
 // authorizeMember authorizes the given member and gives him additional roles based on bot's roles function
@@ -100,21 +110,22 @@ func (bot *UsosBot) authorizeMember(member *discordgo.Member, usosUser *usos.Use
 		return err
 	}
 
-	if authorizeRoleID == "" {
+	guildRoles, err := bot.GuildRoles(member.GuildID)
+	if err != nil {
+		return err
+	}
+	for _, role := range guildRoles {
+		if role.ID == authorizeRoleID {
+			authorizeRole = role
+			break
+		}
+	}
+
+	if authorizeRole == nil {
+		// previous auth role was deleted
 		authorizeRole, err = bot.createAuthorizeRole(member.GuildID)
 		if err != nil {
 			return err
-		}
-	} else {
-		roles, err := bot.GuildRoles(member.GuildID)
-		if err != nil {
-			return err
-		}
-		for _, role := range roles {
-			if role.ID == authorizeRoleID {
-				authorizeRole = role
-				break
-			}
 		}
 	}
 
@@ -129,9 +140,12 @@ func (bot *UsosBot) authorizeMember(member *discordgo.Member, usosUser *usos.Use
 
 	for _, role := range roles {
 		err = bot.GuildMemberRoleAdd(member.GuildID, member.User.ID, role.ID)
+		if err != nil {
+			return err
+		}
 	}
 
-	return err
+	return nil
 }
 
 // privMsgDiscord sends a private message to a user with the given text
@@ -150,7 +164,7 @@ func (bot *UsosBot) privMsgDiscord(userID string, text string) error {
 
 // logDiscord logs a message to all log channels of a guild
 func (bot *UsosBot) logDiscord(guildID string, text string) error {
-	for channelID := range bot.logChannelIDMap[guildID] {
+	for channelID := range bot.getGuildUsosInfo(guildID).logChannelIDs {
 		_, err := bot.ChannelMessageSend(channelID, text)
 		if err != nil {
 			return err
@@ -174,7 +188,9 @@ func (bot *UsosBot) sendAuthorizationInstructions(member *discordgo.Member, toke
 			{
 				Name: "You must authorize yourself before proceeding on this server.",
 				Value: fmt.Sprintf(`In order to do that visit [this page](%s) and authorize.
-				After that send me the authorization verifier using the %s command.`, tokenURL, utils.DiscordCodeSpan("!usos verify -c <verifier>")),
+				After that send me the authorization verifier using the %s command.
+				You can also abort the authorization process using the %s command.`,
+					tokenURL, utils.DiscordCodeSpan("!usos verify -c <verifier>"), utils.DiscordCodeSpan("!usos verify -a")),
 				Inline: true,
 			},
 		},
@@ -183,23 +199,33 @@ func (bot *UsosBot) sendAuthorizationInstructions(member *discordgo.Member, toke
 	return err
 }
 
+// createAuthorizeRole creates an authorize role in the given guild
+func (bot *UsosBot) createAuthorizeRole(GuildID string) (*discordgo.Role, error) {
+	authorizeRole, err := bot.GuildRoleCreate(GuildID)
+	if err != nil {
+		return nil, err
+	}
+	authorizeRole, err = bot.GuildRoleEdit(GuildID, authorizeRole.ID, "authorized", 0, false, 0, true)
+	if err != nil {
+		return nil, err
+	}
+	return authorizeRole, nil
+}
+
 // getAuthorizeRoleID return authorization role id of the given guild
 func (bot *UsosBot) getAuthorizeRoleID(GuildID string) (string, error) {
-	if bot.guildAuthorizeRolesMap[GuildID] != "" {
-		return bot.guildAuthorizeRolesMap[GuildID], nil
+	guildInfo := bot.getGuildUsosInfo(GuildID)
+	if guildInfo.authorizeRoleID != "" {
+		return guildInfo.authorizeRoleID, nil
 	}
 
-	roles, err := bot.GuildRoles(GuildID)
+	role, err := bot.createAuthorizeRole(GuildID)
 	if err != nil {
 		return "", err
 	}
-	for _, role := range roles {
-		if role.Name == "authorized" {
-			bot.guildAuthorizeRolesMap[GuildID] = role.ID
-			return role.ID, nil
-		}
-	}
-	return "", nil
+
+	guildInfo.authorizeRoleID = role.ID
+	return role.ID, nil
 }
 
 // isAuthorized checks if a given member is authorized on his guild
@@ -247,11 +273,22 @@ func (bot *UsosBot) finalizeAuthorization(user *discordgo.User, verifier string)
 	switch err.(type) {
 	case *usos.ErrUnableToCall:
 		return newErrWrongVerifier(err.(*usos.ErrUnableToCall), user.ID, tokenGuilIDPair, verifier)
+	case nil:
+		//no-op
 	default:
-		if err != nil {
-			return err
-		}
+		return err
+
 	}
+
+	message, err := json.MarshalIndent(usosUser, "", "    ")
+	if err != nil {
+		return err
+	}
+	err = bot.logDiscord(tokenGuilIDPair.GuildID, fmt.Sprintf("%s's authorization data:\n```json\n%s\n```", user.Username, message))
+	if err != nil {
+		return err
+	}
+
 	// TODO: usos user filter
 	// if bot.UsosUserFilter != nil {
 	// 	passed, err := bot.UsosUserFilter(usosUser)
@@ -275,14 +312,6 @@ func (bot *UsosBot) finalizeAuthorization(user *discordgo.User, verifier string)
 	}
 	delete(bot.tokenMap, user.ID)
 
-	message, err := json.MarshalIndent(usosUser, "", "    ")
-	if err != nil {
-		return err
-	}
-	err = bot.logDiscord(tokenGuilIDPair.GuildID, fmt.Sprintf("%s's authorization data:\n```json\n%s\n```", user.Username, message))
-	if err != nil {
-		return err
-	}
 	err = bot.privMsgDiscord(user.ID, "Authorization complete")
 	if err != nil {
 		return err
@@ -292,22 +321,34 @@ func (bot *UsosBot) finalizeAuthorization(user *discordgo.User, verifier string)
 
 // addLogChannel adds a channel to log to authorization data from the guild
 func (bot *UsosBot) addLogChannel(guildID string, channelID string) error {
-	if bot.logChannelIDMap[guildID] == nil {
-		bot.logChannelIDMap[guildID] = make(map[string]bool)
-	}
-	if bot.logChannelIDMap[guildID][channelID] {
+	guildInfo := bot.getGuildUsosInfo(guildID)
+	if guildInfo.logChannelIDs[channelID] {
 		return newErrLogChannelAlreadyAdded(channelID)
 	}
-	bot.logChannelIDMap[guildID][channelID] = true
-	return nil
+
+	guildChannels, err := bot.GuildChannels(guildID)
+	if err != nil {
+		return err
+	}
+
+	// only add this guild's channels
+	for _, guildChannel := range guildChannels {
+		if guildChannel.ID == channelID {
+			guildInfo.logChannelIDs[channelID] = true
+			return nil
+		}
+	}
+
+	return newErrLogChannelNotInGuild(channelID, guildID)
 }
 
 // removeLogChannel removes a log channel
 func (bot *UsosBot) removeLogChannel(guildID string, channelID string) error {
-	if !bot.logChannelIDMap[guildID][channelID] {
+	guildInfo := bot.getGuildUsosInfo(guildID)
+	if !guildInfo.logChannelIDs[channelID] {
 		return newErrLogChannelNotAdded(channelID)
 	}
-	delete(bot.logChannelIDMap[guildID], channelID)
+	delete(guildInfo.logChannelIDs, channelID)
 	return nil
 }
 
@@ -328,7 +369,7 @@ func (bot *UsosBot) scanGuild(guildID string) error {
 		}
 
 		if !authorized && !member.User.Bot {
-			err := bot.registerUnauthorizedMember(member)
+			err := bot.addUnauthorizedMember(member)
 			if err != nil {
 				return err
 			}

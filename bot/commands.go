@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/Ogurczak/discord-usos-auth/bot/commands"
@@ -23,10 +24,10 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		&argparse.Options{Required: false,
 			Help:    "custom prompt on the message",
 			Default: "React to this message to get authorized!"})
-	authMsgCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrInCommandHandler {
+	authMsgCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
 		err := bot.spawnAuthorizeMessage(e.ChannelID, *prompt)
 		if err != nil {
-			return commands.NewErrInCommandHandler(err, true)
+			return commands.NewErrHandler(err, true)
 		}
 		return nil
 	}
@@ -37,19 +38,41 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		return nil, err
 	}
 	verifier := verifyCmd.String("c", "code",
-		&argparse.Options{Required: true,
+		&argparse.Options{Required: false,
 			Help: "verification code"})
-	verifyCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrInCommandHandler {
-		err := bot.finalizeAuthorization(e.Author, *verifier)
-		if err != nil {
+	abort := verifyCmd.Flag("a", "abort",
+		&argparse.Options{Required: false,
+			Help: "abort current verification process"})
+	verifyCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
+		if *abort {
+			err := bot.removeUnauthorizedUser(e.Author.ID)
 			switch err.(type) {
-			case *ErrUnregisteredUnauthorizedUser, *ErrFilteredOut, *usos.ErrUnableToCall:
-				return commands.NewErrInCommandHandler(err, true)
+			case *ErrAlreadyUnregisteredUser:
+				return commands.NewErrHandler(err, true)
+			case nil:
+				_, err = bot.ChannelMessageSend(e.ChannelID, "Authorization abort successful")
+				if err != nil {
+					return commands.NewErrHandler(err, false)
+				}
+				return nil
 			default:
-				return commands.NewErrInCommandHandler(err, false)
+				return commands.NewErrHandler(err, false)
 			}
+
 		}
-		return nil
+		if *verifier == "" {
+			// ugly but i don't see a better approach with this argparse library
+			return commands.NewErrHandler(errors.New("[-c|--code] or [-a|--abort] is required"), true)
+		}
+		err := bot.finalizeAuthorization(e.Author, *verifier)
+		switch err.(type) {
+		case *ErrUnregisteredUnauthorizedUser, *ErrFilteredOut, *usos.ErrUnableToCall, *ErrRoleNotInGuild:
+			return commands.NewErrHandler(err, true)
+		case nil:
+			return nil
+		default:
+			return commands.NewErrHandler(err, false)
+		}
 	}
 
 	logChannelCmd := parser.NewCommand("log", "manage discord log channels")
@@ -60,17 +83,16 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	if err != nil {
 		return nil, err
 	}
-	logChannelID := addLogChannelCmd.String("", "id",
+	logChannelID := addLogChannelCmd.String("i", "id",
 		&argparse.Options{Required: false,
-			Help:    "channel id, defaults to channel in which the command was called",
-			Default: ""})
-	addLogChannelCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrInCommandHandler {
+			Help: "channel id, defaults to channel in which the command was called"})
+	addLogChannelCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
 		if *logChannelID == "" {
 			*logChannelID = e.ChannelID
 		}
 		err := bot.addLogChannel(e.GuildID, *logChannelID)
 		if err != nil {
-			return commands.NewErrInCommandHandler(err, true)
+			return commands.NewErrHandler(err, true)
 		}
 		bot.ChannelMessageSend(e.ChannelID, "Successfully added a new log channel")
 		return nil
@@ -81,17 +103,16 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	if err != nil {
 		return nil, err
 	}
-	logChannelIDToRemove := removeLogChannelCmd.String("", "id",
+	logChannelIDToRemove := removeLogChannelCmd.String("i", "id",
 		&argparse.Options{Required: false,
-			Help:    "channel id, defaults to channel in which the command was called",
-			Default: ""})
-	removeLogChannelCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrInCommandHandler {
+			Help: "channel id, defaults to channel in which the command was called"})
+	removeLogChannelCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
 		if *logChannelIDToRemove == "" {
 			*logChannelIDToRemove = e.ChannelID
 		}
 		err := bot.removeLogChannel(e.GuildID, *logChannelIDToRemove)
 		if err != nil {
-			return commands.NewErrInCommandHandler(err, true)
+			return commands.NewErrHandler(err, true)
 		}
 		bot.ChannelMessageSend(e.ChannelID, "Successfully removed a log channel")
 		return nil
@@ -102,26 +123,27 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	if err != nil {
 		return nil, err
 	}
-	listLogChannelCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrInCommandHandler {
-		if len(bot.logChannelIDMap[e.GuildID]) == 0 {
+	listLogChannelCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
+		guildInfo := bot.getGuildUsosInfo(e.GuildID)
+		if len(guildInfo.logChannelIDs) == 0 {
 			msg := "No log channels on this servers set yet."
 			_, err := bot.ChannelMessageSend(e.ChannelID, msg)
 			if err != nil {
-				return commands.NewErrInCommandHandler(err, false)
+				return commands.NewErrHandler(err, false)
 			}
 			return nil
 		}
-		channels := make([]*discordgo.Channel, 0, len(bot.logChannelIDMap[e.GuildID]))
-		for channelID := range bot.logChannelIDMap[e.GuildID] {
+		channels := make([]*discordgo.Channel, 0, len(guildInfo.logChannelIDs))
+		for channelID := range guildInfo.logChannelIDs {
 			channel, err := bot.Channel(channelID)
 			if err != nil {
-				return commands.NewErrInCommandHandler(err, false)
+				return commands.NewErrHandler(err, false)
 			}
 			channels = append(channels, channel)
 		}
 		guild, err := bot.Guild(e.GuildID)
 		if err != nil {
-			return commands.NewErrInCommandHandler(err, false)
+			return commands.NewErrHandler(err, false)
 		}
 		msg := fmt.Sprintf("%s's log channels:\n", guild.Name)
 		for i, channel := range channels {
@@ -129,9 +151,39 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		}
 		_, err = bot.ChannelMessageSend(e.ChannelID, utils.DiscordCodeBlock(msg, ""))
 		if err != nil {
-			return commands.NewErrInCommandHandler(err, false)
+			return commands.NewErrHandler(err, false)
 		}
 		return nil
+	}
+
+	roleCmd := parser.NewCommand("role", "change authorization role")
+	err = roleCmd.SetScope(commands.ScopeGuild)
+	if err != nil {
+		return nil, err
+	}
+	roleID := roleCmd.String("i", "id", &argparse.Options{Required: true,
+		Help: "set the server's authorization role"})
+	roleCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
+		guildInfo := bot.getGuildUsosInfo(e.GuildID)
+
+		roles, err := bot.GuildRoles(e.GuildID)
+		if err != nil {
+			return commands.NewErrHandler(err, false)
+		}
+
+		for _, role := range roles {
+			if role.ID == *roleID {
+				guildInfo.authorizeRoleID = *roleID
+				_, err = bot.ChannelMessageSend(e.ChannelID, "Authorization role ID set successfully")
+				if err != nil {
+					return commands.NewErrHandler(err, false)
+				}
+				return nil
+			}
+		}
+
+		err = newErrRoleNotInGuild(*roleID, e.GuildID)
+		return commands.NewErrHandler(err, true)
 	}
 
 	return parser, nil

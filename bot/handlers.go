@@ -27,21 +27,26 @@ func (bot *UsosBot) messageCreateHandler(session *discordgo.Session, e *discordg
 	}
 
 	err = parser.Parse(e)
-	_, isParseError := err.(*commands.ErrParse)
-	if err != nil && !isParseError {
+	switch err.(type) {
+	case *commands.ErrParse:
+		return
+	case nil:
+		// no-op
+	default:
 		log.Println(err)
 		return
 	}
 
-	if !parser.ParsedHelp() && err == nil {
-		err = parser.Handle(e)
-		_, isHandleError := err.(*commands.ErrInCommandHandler)
-		_, isScopeError := err.(*commands.ErrCommandInWrongScope)
-		_, isPrivilageError := err.(*commands.ErrUnprivilaged)
-		if err != nil && !isHandleError && !isScopeError && !isPrivilageError {
-			log.Println(err)
-			return
-		}
+	if parser.ParsedHelp() {
+		return
+	}
+
+	err = parser.Handle(e)
+	switch err.(type) {
+	case *commands.ErrHandler, *commands.ErrCommandInWrongScope, *commands.ErrUnprivilaged, nil:
+		// no-op
+	default:
+		log.Println(err)
 	}
 }
 
@@ -64,8 +69,11 @@ func (bot *UsosBot) reactionAddHandler(session *discordgo.Session, e *discordgo.
 				log.Println(err)
 			}
 			if !authorized {
-				err = bot.registerUnauthorizedMember(member)
-				if err != nil {
+				err = bot.addUnauthorizedMember(member)
+				switch err.(type) {
+				case *ErrAlreadyRegistered, nil:
+					// no-op
+				default:
 					log.Println(err)
 				}
 			}
@@ -89,7 +97,7 @@ func guildMemberUpdateHandler(bot *UsosBot, e *discordgo.GuildMemberUpdate) {
 	}
 
 	if !authorized {
-		err := bot.registerUnauthorizedMember(e.Member)
+		err := bot.addUnauthorizedMember(e.Member)
 		if err != nil {
 			log.Println(err)
 		}
@@ -107,7 +115,7 @@ func guildMemberAddHandler(bot *UsosBot, e *discordgo.GuildMemberAdd) {
 	}
 
 	if !authorized {
-		err := bot.registerUnauthorizedMember(e.Member)
+		err := bot.addUnauthorizedMember(e.Member)
 		if err != nil {
 			log.Println(err)
 		}

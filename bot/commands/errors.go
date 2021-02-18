@@ -45,15 +45,15 @@ func (e *ErrCommandInWrongScope) Error() string {
 	}
 }
 
-// ErrInCommandHandler represtents failure in
-type ErrInCommandHandler struct {
+// ErrHandler represtents failure in
+type ErrHandler struct {
 	error
 	RedirectToCallerChannel bool
 }
 
-// NewErrInCommandHandler returns a pointer to a new instance of ErrCommandHandlerError
-func NewErrInCommandHandler(err error, RedirectToCallerChannel bool) *ErrInCommandHandler {
-	return &ErrInCommandHandler{
+// NewErrHandler returns a pointer to a new instance of ErrCommandHandlerError
+func NewErrHandler(err error, RedirectToCallerChannel bool) *ErrHandler {
+	return &ErrHandler{
 		error:                   err,
 		RedirectToCallerChannel: RedirectToCallerChannel,
 	}
