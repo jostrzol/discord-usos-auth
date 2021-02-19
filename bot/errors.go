@@ -141,3 +141,14 @@ func newErrRoleNotInGuild(RoleID string, GuildID string) *ErrRoleNotInGuild {
 func (e *ErrRoleNotInGuild) Error() string {
 	return "This role does not belong to this server"
 }
+
+// ErrEmptyFilter represtents failure in setting a filter to an empty one
+type ErrEmptyFilter struct{}
+
+func newErrEmptyFilter() *ErrEmptyFilter {
+	return &ErrEmptyFilter{}
+}
+
+func (e *ErrEmptyFilter) Error() string {
+	return "This filter is empty"
+}

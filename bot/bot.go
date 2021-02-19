@@ -21,6 +21,7 @@ type requestTokenGuildPair struct {
 type guildUsosInfo struct {
 	authorizeRoleID string
 	logChannelIDs   map[string]bool
+	filters         []*usos.User
 }
 
 // UsosBot represents a session of usos authorization bot
@@ -64,6 +65,7 @@ func (bot *UsosBot) getGuildUsosInfo(guildID string) *guildUsosInfo {
 	if bot.guildUsosInfos[guildID] == nil {
 		bot.guildUsosInfos[guildID] = &guildUsosInfo{
 			logChannelIDs: make(map[string]bool),
+			filters:       make([]*usos.User, 0),
 		}
 		return bot.guildUsosInfos[guildID]
 	}
@@ -289,16 +291,9 @@ func (bot *UsosBot) finalizeAuthorization(user *discordgo.User, verifier string)
 		return err
 	}
 
-	// TODO: usos user filter
-	// if bot.UsosUserFilter != nil {
-	// 	passed, err := bot.UsosUserFilter(usosUser)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	if !passed {
-	// 		return newErrFilteredOut(user.ID)
-	// 	}
-	// }
+	if !bot.filter(tokenGuilIDPair.GuildID, usosUser) {
+		return newErrFilteredOut(user.ID)
+	}
 
 	member, err := bot.GuildMember(tokenGuilIDPair.GuildID, user.ID)
 	if err != nil {
@@ -350,6 +345,20 @@ func (bot *UsosBot) removeLogChannel(guildID string, channelID string) error {
 	}
 	delete(guildInfo.logChannelIDs, channelID)
 	return nil
+}
+
+// filter checks if an usos user passes at least one of the set filters
+func (bot *UsosBot) filter(guildID string, user *usos.User) bool {
+	guildInfo := bot.getGuildUsosInfo(guildID)
+	if len(guildInfo.filters) == 0 {
+		return true
+	}
+	for _, filter := range guildInfo.filters {
+		if utils.FilterRec(filter, user) {
+			return true
+		}
+	}
+	return false
 }
 
 //#region DEPRECATED

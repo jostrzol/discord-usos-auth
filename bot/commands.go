@@ -15,7 +15,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	parser := commands.NewDiscordParser("!usos", "Execute the Usos Authrization Bot's discord commands", bot.Session)
 
 	authMsgCmd := parser.NewCommand("auth-msg", "Spawn a message which upon being reacted to begins the process of usos authentication")
-	authMsgCmd.SetPrivilagesRequired(true)
+	authMsgCmd.PrivilagesRequired = true
 	err := authMsgCmd.SetScope(commands.ScopeGuild)
 	if err != nil {
 		return nil, err
@@ -76,13 +76,13 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	}
 
 	logChannelCmd := parser.NewCommand("log", "manage discord log channels")
-	logChannelCmd.SetPrivilagesRequired(true)
-
-	addLogChannelCmd := logChannelCmd.NewCommand("add", "Add a new log channel to this server")
-	err = addLogChannelCmd.SetScope(commands.ScopeGuild)
+	logChannelCmd.PrivilagesRequired = true
+	err = logChannelCmd.SetScope(commands.ScopeGuild)
 	if err != nil {
 		return nil, err
 	}
+
+	addLogChannelCmd := logChannelCmd.NewCommand("add", "Add a new log channel to this server")
 	logChannelID := addLogChannelCmd.String("i", "id",
 		&argparse.Options{Required: false,
 			Help: "channel id, defaults to channel in which the command was called"})
@@ -99,10 +99,6 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	}
 
 	removeLogChannelCmd := logChannelCmd.NewCommand("remove", "Remove a log channel from this server")
-	err = removeLogChannelCmd.SetScope(commands.ScopeGuild)
-	if err != nil {
-		return nil, err
-	}
 	logChannelIDToRemove := removeLogChannelCmd.String("i", "id",
 		&argparse.Options{Required: false,
 			Help: "channel id, defaults to channel in which the command was called"})
@@ -119,10 +115,6 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	}
 
 	listLogChannelCmd := logChannelCmd.NewCommand("list", "List log channels bound to this server")
-	err = listLogChannelCmd.SetScope(commands.ScopeGuild)
-	if err != nil {
-		return nil, err
-	}
 	listLogChannelCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
 		guildInfo := bot.getGuildUsosInfo(e.GuildID)
 		if len(guildInfo.logChannelIDs) == 0 {
@@ -157,6 +149,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	}
 
 	roleCmd := parser.NewCommand("role", "change authorization role")
+	roleCmd.PrivilagesRequired = true
 	err = roleCmd.SetScope(commands.ScopeGuild)
 	if err != nil {
 		return nil, err
@@ -184,6 +177,34 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 
 		err = newErrRoleNotInGuild(*roleID, e.GuildID)
 		return commands.NewErrHandler(err, true)
+	}
+
+	filterCmd := parser.NewCommand("filter", "manage usos filters")
+	filterCmd.PrivilagesRequired = true
+	err = filterCmd.SetScope(commands.ScopeGuild)
+	if err != nil {
+		return nil, err
+	}
+
+	addFilterCmd := parser.NewCommand("add", "add usos filter; user has to pass at least one of the filters to get past the authorization successfully")
+	programmes := addFilterCmd.StringList("p", "programme", &argparse.Options{Required: false,
+		Help: "Programme names which the user is required too have (all) to pass."})
+	addFilterCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
+		if len(*programmes) == 0 {
+			return commands.NewErrHandler(newErrEmptyFilter(), true)
+		}
+
+		usosProrammes := make([]usos.Programme, len(*programmes))
+		for i, programme := range *programmes {
+			usosProrammes[i] = usos.Programme{Name: programme}
+		}
+
+		filter := &usos.User{
+			Programmes: usosProrammes,
+		}
+
+		bot.guildUsosInfos[e.GuildID].filters = append(bot.guildUsosInfos[e.GuildID].filters, filter)
+		return nil
 	}
 
 	return parser, nil

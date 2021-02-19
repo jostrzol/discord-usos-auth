@@ -28,7 +28,7 @@ type DiscordCommand struct {
 	session            *discordgo.Session
 	commands           []*DiscordCommand
 	scope              CommandScope
-	privilagesRequired bool
+	PrivilagesRequired bool
 	parent             *DiscordCommand
 }
 
@@ -99,7 +99,7 @@ func (parser *DiscordParser) Handle(e *discordgo.MessageCreate) error {
 	}
 
 	// validate privilages
-	if cmd.PrivilagesRequired() {
+	if cmd.PrivilagesRequired {
 		isPrivilaged, err := cmd.IsPrivilaged(e)
 		if err != nil {
 			return err
@@ -148,6 +148,9 @@ func (parser *DiscordParser) ParsedHelp() bool {
 func (command *DiscordCommand) NewCommand(name string, description string) *DiscordCommand {
 	argparseCommand := command.Command.NewCommand(name, description)
 	newCommand := newDiscordCommand(argparseCommand, command.session)
+
+	newCommand.PrivilagesRequired = command.PrivilagesRequired
+	newCommand.scope = command.scope
 
 	// set relations
 	newCommand.parent = command
@@ -244,20 +247,20 @@ func (command *DiscordCommand) GetParent() *DiscordCommand {
 }
 
 // PrivilagesRequired indicates if privilages are required to execute this command
-func (command *DiscordCommand) PrivilagesRequired() bool {
-	if command.privilagesRequired {
-		return true
-	}
-	if command.GetParent() != nil {
-		return command.GetParent().PrivilagesRequired()
-	}
-	return false
-}
+// func (command *DiscordCommand) PrivilagesRequired() bool {
+// 	if command.privilagesRequired {
+// 		return true
+// 	}
+// 	if command.GetParent() != nil {
+// 		return command.GetParent().PrivilagesRequired()
+// 	}
+// 	return false
+// }
 
 // SetPrivilagesRequired sets the preivilage level for this command
-func (command *DiscordCommand) SetPrivilagesRequired(b bool) {
-	command.privilagesRequired = b
-}
+// func (command *DiscordCommand) SetPrivilagesRequired(b bool) {
+// 	command.privilagesRequired = b
+// }
 
 // IsPrivilaged checks if a given message is privilaged for this command
 func (command *DiscordCommand) IsPrivilaged(e *discordgo.MessageCreate) (bool, error) {
