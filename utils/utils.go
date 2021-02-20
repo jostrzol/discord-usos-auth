@@ -25,20 +25,46 @@ func BitmaskCheck(value int64, mask int64) bool {
 	return value&mask == mask
 }
 
-// FilterRec recursively checks if the value struct complies with the filter struct
-func FilterRec(filter interface{}, value interface{}) bool {
-	f := reflect.ValueOf(filter)
-	v := reflect.ValueOf(value)
+// FilterRec recursively checks if the value struct complies with the filter struct.
+// Structs have to be of the same type
+func FilterRec(filter interface{}, value interface{}) (bool, error) {
+	f := reflect.Indirect(reflect.ValueOf(filter))
+	v := reflect.Indirect(reflect.ValueOf(value))
+
+	if f.Type() != v.Type() {
+		return false, newErrUnmatchedTypes(f.Type(), v.Type())
+	}
 
 	for i := 0; i < f.NumField(); i++ {
 		switch f.Field(i).Kind() {
 		case reflect.Slice, reflect.Array:
-			return FilterRec(f.Field(i).Interface(), v.Field(i).Interface())
+			for j := 0; j < f.Field(i).Len(); j++ {
+				fEl := reflect.Indirect(f.Field(i).Index(j))
+				if fEl.IsZero() {
+					continue
+				}
+				passes := false
+				for k := 0; k < v.Field(i).Len(); k++ {
+					vEl := reflect.Indirect(v.Field(i).Index(k))
+					match, err := FilterRec(fEl.Interface(), vEl.Interface())
+					if err != nil {
+						return false, err
+					}
+					if match {
+						passes = true
+						break
+					}
+				}
+				if !passes {
+					return false, nil
+				}
+			}
+			return true, nil
 		default:
-			if !f.IsZero() && f.Field(i) != v.Field(i) {
-				return false
+			if !f.Field(i).IsZero() && f.Field(i).Interface() != v.Field(i).Interface() {
+				return false, nil
 			}
 		}
 	}
-	return true
+	return true, nil
 }

@@ -7,26 +7,15 @@ import (
 	"syscall"
 
 	"github.com/Ogurczak/discord-usos-auth/bot"
-	"github.com/Ogurczak/discord-usos-auth/usos"
 	"github.com/akamensky/argparse"
 )
 
 var programmeName *string
 var botToken *string
 
-func filterFunc(u *usos.User) (bool, error) {
-	for _, prog := range u.Programmes {
-		if prog.Name == *programmeName {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func init() {
 	parser := argparse.NewParser("discord-usos-auth", "Runs an Usos Authorization Bot instance using the given bot token")
 	botToken = parser.String("t", "token", &argparse.Options{Required: true, Help: "bot token"})
-	programmeName = parser.String("p", "programme", &argparse.Options{Required: true, Help: "student programme to filter through"})
 	err := parser.Parse(os.Args)
 	if err != nil {
 		log.Fatal(err)

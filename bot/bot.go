@@ -291,7 +291,15 @@ func (bot *UsosBot) finalizeAuthorization(user *discordgo.User, verifier string)
 		return err
 	}
 
-	if !bot.filter(tokenGuilIDPair.GuildID, usosUser) {
+	match, err := bot.filter(tokenGuilIDPair.GuildID, usosUser)
+	if err != nil {
+		return err
+	}
+	if !match {
+		err := bot.removeUnauthorizedUser(user.ID)
+		if err != nil {
+			return err
+		}
 		return newErrFilteredOut(user.ID)
 	}
 
@@ -348,17 +356,21 @@ func (bot *UsosBot) removeLogChannel(guildID string, channelID string) error {
 }
 
 // filter checks if an usos user passes at least one of the set filters
-func (bot *UsosBot) filter(guildID string, user *usos.User) bool {
+func (bot *UsosBot) filter(guildID string, user *usos.User) (bool, error) {
 	guildInfo := bot.getGuildUsosInfo(guildID)
 	if len(guildInfo.filters) == 0 {
-		return true
+		return true, nil
 	}
 	for _, filter := range guildInfo.filters {
-		if utils.FilterRec(filter, user) {
-			return true
+		match, err := utils.FilterRec(filter, user)
+		if err != nil {
+			return false, err
+		}
+		if match {
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 //#region DEPRECATED

@@ -4,7 +4,7 @@ import (
 	"github.com/Ogurczak/discord-usos-auth/usos"
 )
 
-// ErrAlreadyUnregisteredUser represtents failure in
+// ErrAlreadyUnregisteredUser represtents failure in aborting an authorization of non-registered unauthorized user
 type ErrAlreadyUnregisteredUser struct {
 	UserID string
 }
@@ -151,4 +151,18 @@ func newErrEmptyFilter() *ErrEmptyFilter {
 
 func (e *ErrEmptyFilter) Error() string {
 	return "This filter is empty"
+}
+
+// ErrNoSuchFilter represtents failure in removing a non-existant filter
+type ErrNoSuchFilter struct {
+	ID int
+}
+
+func newErrNoSuchFilter(ID int) *ErrNoSuchFilter {
+	return &ErrNoSuchFilter{
+		ID: ID,
+	}
+}
+func (e *ErrNoSuchFilter) Error() string {
+	return "No filter with such ID specified."
 }
