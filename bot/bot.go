@@ -28,9 +28,9 @@ type guildUsosInfo struct {
 type UsosBot struct {
 	*discordgo.Session
 
-	tokenMap               map[string]*requestTokenGuildPair
-	authorizeMessegeIDList []string
-	guildUsosInfos         map[string]*guildUsosInfo
+	tokenMap            map[string]*requestTokenGuildPair
+	authorizeMessegeIDs map[string]bool
+	guildUsosInfos      map[string]*guildUsosInfo
 }
 
 // New creates a new session of usos authorization bot
@@ -48,9 +48,9 @@ func New(Token string) (*UsosBot, error) {
 	bot := &UsosBot{
 		Session: session,
 
-		tokenMap:               make(map[string]*requestTokenGuildPair),
-		authorizeMessegeIDList: make([]string, 0),
-		guildUsosInfos:         make(map[string]*guildUsosInfo),
+		tokenMap:            make(map[string]*requestTokenGuildPair),
+		authorizeMessegeIDs: make(map[string]bool),
+		guildUsosInfos:      make(map[string]*guildUsosInfo),
 	}
 
 	bot.AddHandler(bot.messageCreateHandler)
@@ -255,7 +255,7 @@ func (bot *UsosBot) spawnAuthorizeMessage(ChannelID string, prompt string) error
 	if err != nil {
 		return err
 	}
-	bot.authorizeMessegeIDList = append(bot.authorizeMessegeIDList, msg.ID)
+	bot.authorizeMessegeIDs[msg.ID] = true
 	return nil
 }
 
@@ -268,13 +268,13 @@ func (bot *UsosBot) finalizeAuthorization(user *discordgo.User, verifier string)
 
 	accessToken, err := tokenGuilIDPair.RequestToken.GetAccessToken(verifier)
 	if err != nil {
-		return err
+		return newErrWrongVerifier(err, user.ID, tokenGuilIDPair, verifier)
 	}
 
 	usosUser, err := usos.NewUsosUser(accessToken)
 	switch err.(type) {
 	case *usos.ErrUnableToCall:
-		return newErrWrongVerifier(err.(*usos.ErrUnableToCall), user.ID, tokenGuilIDPair, verifier)
+		return newErrWrongVerifier(err, user.ID, tokenGuilIDPair, verifier)
 	case nil:
 		//no-op
 	default:

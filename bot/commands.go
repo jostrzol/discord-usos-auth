@@ -67,7 +67,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		}
 		err := bot.finalizeAuthorization(e.Author, *verifier)
 		switch err.(type) {
-		case *ErrUnregisteredUnauthorizedUser, *ErrFilteredOut, *usos.ErrUnableToCall, *ErrRoleNotInGuild:
+		case *ErrUnregisteredUnauthorizedUser, *ErrFilteredOut, *usos.ErrUnableToCall, *ErrRoleNotInGuild, *ErrWrongVerifier:
 			return commands.NewErrHandler(err, true)
 		case nil:
 			return nil

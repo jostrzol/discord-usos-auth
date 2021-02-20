@@ -57,25 +57,23 @@ func (bot *UsosBot) readyHandler(session *discordgo.Session, e *discordgo.Ready)
 
 // reactionAddHandler handles reactions added to bot's messages
 func (bot *UsosBot) reactionAddHandler(session *discordgo.Session, e *discordgo.MessageReactionAdd) {
-	for _, id := range bot.authorizeMessegeIDList {
-		if e.MessageID == id {
-			member, err := bot.GuildMember(e.GuildID, e.UserID)
-			if err != nil {
+	if bot.authorizeMessegeIDs[e.MessageID] {
+		member, err := bot.GuildMember(e.GuildID, e.UserID)
+		if err != nil {
+			log.Println(err)
+		}
+		member.GuildID = e.GuildID
+		authorized, err := bot.isAuthorized(member)
+		if err != nil {
+			log.Println(err)
+		}
+		if !authorized {
+			err = bot.addUnauthorizedMember(member)
+			switch err.(type) {
+			case *ErrAlreadyRegistered, nil:
+				// no-op
+			default:
 				log.Println(err)
-			}
-			member.GuildID = e.GuildID
-			authorized, err := bot.isAuthorized(member)
-			if err != nil {
-				log.Println(err)
-			}
-			if !authorized {
-				err = bot.addUnauthorizedMember(member)
-				switch err.(type) {
-				case *ErrAlreadyRegistered, nil:
-					// no-op
-				default:
-					log.Println(err)
-				}
 			}
 		}
 	}

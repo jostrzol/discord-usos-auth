@@ -1,9 +1,5 @@
 package bot
 
-import (
-	"github.com/Ogurczak/discord-usos-auth/usos"
-)
-
 // ErrAlreadyUnregisteredUser represtents failure in aborting an authorization of non-registered unauthorized user
 type ErrAlreadyUnregisteredUser struct {
 	UserID string
@@ -48,15 +44,15 @@ func (e *ErrFilteredOut) Error() string {
 
 // ErrWrongVerifier represtents failure in verifying the user with usos caused by wrong verifier
 type ErrWrongVerifier struct {
-	*usos.ErrUnableToCall
+	error
 	UserID                string
 	RequestTokenGuildPair *requestTokenGuildPair
 	verifier              string
 }
 
-func newErrWrongVerifier(cause *usos.ErrUnableToCall, UserID string, RequestTokenGuildPair *requestTokenGuildPair, verifier string) *ErrWrongVerifier {
+func newErrWrongVerifier(cause error, UserID string, RequestTokenGuildPair *requestTokenGuildPair, verifier string) *ErrWrongVerifier {
 	return &ErrWrongVerifier{
-		ErrUnableToCall:       cause,
+		error:                 cause,
 		UserID:                UserID,
 		RequestTokenGuildPair: RequestTokenGuildPair,
 		verifier:              verifier,
