@@ -118,7 +118,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	listLogChannelCmd := logChannelCmd.NewCommand("list", "List log channels bound to this server")
 	listLogChannelCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
 		guildInfo := bot.getGuildUsosInfo(e.GuildID)
-		if len(guildInfo.logChannelIDs) == 0 {
+		if len(guildInfo.LogChannelIDs) == 0 {
 			msg := "No log channels on this servers set yet."
 			_, err := bot.ChannelMessageSend(e.ChannelID, msg)
 			if err != nil {
@@ -126,8 +126,8 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 			}
 			return nil
 		}
-		channels := make([]*discordgo.Channel, 0, len(guildInfo.logChannelIDs))
-		for channelID := range guildInfo.logChannelIDs {
+		channels := make([]*discordgo.Channel, 0, len(guildInfo.LogChannelIDs))
+		for channelID := range guildInfo.LogChannelIDs {
 			channel, err := bot.Channel(channelID)
 			if err != nil {
 				return commands.NewErrHandler(err, false)
@@ -167,7 +167,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 
 		for _, role := range roles {
 			if role.ID == *roleID {
-				guildInfo.authorizeRoleID = *roleID
+				guildInfo.AuthorizeRoleID = *roleID
 				_, err = bot.ChannelMessageSend(e.ChannelID, "Authorization role ID set successfully")
 				if err != nil {
 					return commands.NewErrHandler(err, false)
@@ -205,7 +205,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		}
 
 		guildInfo := bot.getGuildUsosInfo(e.GuildID)
-		guildInfo.filters = append(guildInfo.filters, filter)
+		guildInfo.Filters = append(guildInfo.Filters, filter)
 
 		_, err := bot.ChannelMessageSend(e.ChannelID, "Filter added successfully")
 		if err != nil {
@@ -219,10 +219,10 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		Help: fmt.Sprintf("Filter's id, can be obtained using the %s command", utils.DiscordCodeSpan("!usos filter list"))})
 	removeFilterCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
 		guildInfo := bot.getGuildUsosInfo(e.GuildID)
-		if *removeFilterID < 1 || *removeFilterID > len(guildInfo.filters) {
+		if *removeFilterID < 1 || *removeFilterID > len(guildInfo.Filters) {
 			commands.NewErrHandler(newErrNoSuchFilter(*removeFilterID), true)
 		}
-		guildInfo.filters = append(guildInfo.filters[:*removeFilterID-1], guildInfo.filters[*removeFilterID:]...)
+		guildInfo.Filters = append(guildInfo.Filters[:*removeFilterID-1], guildInfo.Filters[*removeFilterID:]...)
 
 		_, err := bot.ChannelMessageSend(e.ChannelID, "Filter removed successfully")
 		if err != nil {
@@ -235,7 +235,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	listFilterCmd := filterCmd.NewCommand("list", "list usos filters")
 	listFilterCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
 		guildInfo := bot.getGuildUsosInfo(e.GuildID)
-		if len(guildInfo.filters) == 0 {
+		if len(guildInfo.Filters) == 0 {
 			_, err := bot.ChannelMessageSend(e.ChannelID, "No filters set yet, all usos-verified users are let through.")
 			if err != nil {
 				return commands.NewErrHandler(err, false)
@@ -249,7 +249,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		}
 
 		msg := fmt.Sprintf("%s's Filters:", guild.Name)
-		for i, filter := range guildInfo.filters {
+		for i, filter := range guildInfo.Filters {
 			msg += fmt.Sprintf("\n%d.\n", i+1)
 			body, err := json.MarshalIndent(filter, "", "    ")
 			if err != nil {

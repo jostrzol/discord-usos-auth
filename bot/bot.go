@@ -3,6 +3,7 @@ package bot
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"time"
@@ -19,9 +20,9 @@ type requestTokenGuildPair struct {
 }
 
 type guildUsosInfo struct {
-	authorizeRoleID string
-	logChannelIDs   map[string]bool
-	filters         []*usos.User
+	AuthorizeRoleID string
+	LogChannelIDs   map[string]bool
+	Filters         []*usos.User
 }
 
 // UsosBot represents a session of usos authorization bot
@@ -64,8 +65,8 @@ func New(Token string) (*UsosBot, error) {
 func (bot *UsosBot) getGuildUsosInfo(guildID string) *guildUsosInfo {
 	if bot.guildUsosInfos[guildID] == nil {
 		bot.guildUsosInfos[guildID] = &guildUsosInfo{
-			logChannelIDs: make(map[string]bool),
-			filters:       make([]*usos.User, 0),
+			LogChannelIDs: make(map[string]bool),
+			Filters:       make([]*usos.User, 0),
 		}
 		return bot.guildUsosInfos[guildID]
 	}
@@ -166,7 +167,7 @@ func (bot *UsosBot) privMsgDiscord(userID string, text string) error {
 
 // logDiscord logs a message to all log channels of a guild
 func (bot *UsosBot) logDiscord(guildID string, text string) error {
-	for channelID := range bot.getGuildUsosInfo(guildID).logChannelIDs {
+	for channelID := range bot.getGuildUsosInfo(guildID).LogChannelIDs {
 		_, err := bot.ChannelMessageSend(channelID, text)
 		if err != nil {
 			return err
@@ -217,8 +218,8 @@ func (bot *UsosBot) createAuthorizeRole(GuildID string) (*discordgo.Role, error)
 // getAuthorizeRoleID return authorization role id of the given guild
 func (bot *UsosBot) getAuthorizeRoleID(GuildID string) (string, error) {
 	guildInfo := bot.getGuildUsosInfo(GuildID)
-	if guildInfo.authorizeRoleID != "" {
-		return guildInfo.authorizeRoleID, nil
+	if guildInfo.AuthorizeRoleID != "" {
+		return guildInfo.AuthorizeRoleID, nil
 	}
 
 	role, err := bot.createAuthorizeRole(GuildID)
@@ -226,7 +227,7 @@ func (bot *UsosBot) getAuthorizeRoleID(GuildID string) (string, error) {
 		return "", err
 	}
 
-	guildInfo.authorizeRoleID = role.ID
+	guildInfo.AuthorizeRoleID = role.ID
 	return role.ID, nil
 }
 
@@ -325,7 +326,7 @@ func (bot *UsosBot) finalizeAuthorization(user *discordgo.User, verifier string)
 // addLogChannel adds a channel to log to authorization data from the guild
 func (bot *UsosBot) addLogChannel(guildID string, channelID string) error {
 	guildInfo := bot.getGuildUsosInfo(guildID)
-	if guildInfo.logChannelIDs[channelID] {
+	if guildInfo.LogChannelIDs[channelID] {
 		return newErrLogChannelAlreadyAdded(channelID)
 	}
 
@@ -337,7 +338,7 @@ func (bot *UsosBot) addLogChannel(guildID string, channelID string) error {
 	// only add this guild's channels
 	for _, guildChannel := range guildChannels {
 		if guildChannel.ID == channelID {
-			guildInfo.logChannelIDs[channelID] = true
+			guildInfo.LogChannelIDs[channelID] = true
 			return nil
 		}
 	}
@@ -348,20 +349,20 @@ func (bot *UsosBot) addLogChannel(guildID string, channelID string) error {
 // removeLogChannel removes a log channel
 func (bot *UsosBot) removeLogChannel(guildID string, channelID string) error {
 	guildInfo := bot.getGuildUsosInfo(guildID)
-	if !guildInfo.logChannelIDs[channelID] {
+	if !guildInfo.LogChannelIDs[channelID] {
 		return newErrLogChannelNotAdded(channelID)
 	}
-	delete(guildInfo.logChannelIDs, channelID)
+	delete(guildInfo.LogChannelIDs, channelID)
 	return nil
 }
 
 // filter checks if an usos user passes at least one of the set filters
 func (bot *UsosBot) filter(guildID string, user *usos.User) (bool, error) {
 	guildInfo := bot.getGuildUsosInfo(guildID)
-	if len(guildInfo.filters) == 0 {
+	if len(guildInfo.Filters) == 0 {
 		return true, nil
 	}
-	for _, filter := range guildInfo.filters {
+	for _, filter := range guildInfo.Filters {
 		match, err := utils.FilterRec(filter, user)
 		if err != nil {
 			return false, err
@@ -371,6 +372,45 @@ func (bot *UsosBot) filter(guildID string, user *usos.User) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+type settings struct {
+	TokenMap            map[string]*requestTokenGuildPair `json:"tokenMap"`
+	GuildUsosInfos      map[string]*guildUsosInfo         `json:"guildUsosInfos"`
+	AuthorizeMessageIDs map[string]bool                   `json:"authorizeMessageIDs"`
+}
+
+// ExportSettings exports current bot settings on all servers to a json file
+func (bot *UsosBot) ExportSettings(w io.Writer) error {
+	stngs := settings{
+		TokenMap:            bot.tokenMap,
+		GuildUsosInfos:      bot.guildUsosInfos,
+		AuthorizeMessageIDs: bot.authorizeMessegeIDs,
+	}
+	err := json.NewEncoder(w).Encode(&stngs)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ImportSettings imports bot settings on all servers from a json file
+// (overrides current settings)
+func (bot *UsosBot) ImportSettings(r io.Reader) error {
+	stngs := settings{}
+
+	err := json.NewDecoder(r).Decode(&stngs)
+	if err != nil {
+		return err
+	}
+
+	bot.authorizeMessegeIDs = stngs.AuthorizeMessageIDs
+	bot.guildUsosInfos = stngs.GuildUsosInfos
+	bot.tokenMap = stngs.TokenMap
+
+	return nil
 }
 
 //#region DEPRECATED
