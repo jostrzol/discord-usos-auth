@@ -8,8 +8,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// messageCreateHandler handles messeges received by the bot
-func (bot *UsosBot) messageCreateHandler(session *discordgo.Session, e *discordgo.MessageCreate) {
+// handlerMessageCreate handles messeges received by the bot
+func (bot *UsosBot) handlerMessageCreate(session *discordgo.Session, e *discordgo.MessageCreate) {
 	// ignore self
 	if e.Author.ID == bot.State.User.ID {
 		return
@@ -50,22 +50,35 @@ func (bot *UsosBot) messageCreateHandler(session *discordgo.Session, e *discordg
 	}
 }
 
-// readyHandler indicates that the bot is ready
-func (bot *UsosBot) readyHandler(session *discordgo.Session, e *discordgo.Ready) {
+// handlerReady indicates that the bot is ready
+func (bot *UsosBot) handlerReady(session *discordgo.Session, e *discordgo.Ready) {
 	log.Println("Ready")
 }
 
-// reactionAddHandler handles reactions added to bot's messages
-func (bot *UsosBot) reactionAddHandler(session *discordgo.Session, e *discordgo.MessageReactionAdd) {
-	if bot.authorizeMessegeIDs[e.MessageID] {
+// handlerReactionAdd handles reactions added to bot's messages
+func (bot *UsosBot) handlerReactionAdd(session *discordgo.Session, e *discordgo.MessageReactionAdd) {
+	guildInfo := bot.getGuildUsosInfo(e.GuildID)
+	if guildInfo.AuthorizeMessegeIDs[e.ChannelID][e.MessageID] {
+		_, err := bot.ChannelMessage(e.ChannelID, e.MessageID)
+		if err != nil {
+			if IsNotFound(err) {
+				// message was deleted, forget it
+				delete(guildInfo.AuthorizeMessegeIDs[e.ChannelID], e.MessageID)
+				return
+			}
+			log.Println(err)
+			return
+		}
 		member, err := bot.GuildMember(e.GuildID, e.UserID)
 		if err != nil {
 			log.Println(err)
+			return
 		}
 		member.GuildID = e.GuildID
 		authorized, err := bot.isAuthorized(member)
 		if err != nil {
 			log.Println(err)
+			return
 		}
 		if !authorized {
 			err = bot.addUnauthorizedMember(member)
@@ -74,60 +87,91 @@ func (bot *UsosBot) reactionAddHandler(session *discordgo.Session, e *discordgo.
 				// no-op
 			default:
 				log.Println(err)
+				return
 			}
 		}
 	}
 }
 
-//#region DEPRECATED
+//#region Cleaning handlers
 
-// guildMemberUpdateHandler checks if the member is authorized or not after the update
-// and sends the authorization instructions if not
-// NO LONGER USED DUE TO REACTION-BASED HANDLING
-func guildMemberUpdateHandler(bot *UsosBot, e *discordgo.GuildMemberUpdate) {
-	if e.User.ID == bot.State.User.ID {
-		return
-	}
-	log.Println("Member update")
-	authorized, err := bot.isAuthorized(e.Member)
-	if err != nil {
-		log.Println(err)
-	}
+func (bot *UsosBot) handlerChannelDelete(session *discordgo.Session, e *discordgo.ChannelDelete) {
+	log.Println("Channel deleted")
+	guildInfo := bot.getGuildUsosInfo(e.GuildID)
+	delete(guildInfo.LogChannelIDs, e.Channel.ID)
+}
 
-	if !authorized {
-		err := bot.addUnauthorizedMember(e.Member)
-		if err != nil {
-			log.Println(err)
-		}
+func (bot *UsosBot) handlerGuildMemberRemove(session *discordgo.Session, e *discordgo.GuildMemberRemove) {
+	log.Println("Guild member removed")
+	delete(bot.tokenMap, e.User.ID)
+}
+
+func (bot *UsosBot) handlerGuildRoleDelete(session *discordgo.Session, e *discordgo.GuildRoleDelete) {
+	log.Println("Guild role deleted")
+	guildInfo := bot.getGuildUsosInfo(e.GuildID)
+	if e.RoleID == guildInfo.AuthorizeRoleID {
+		guildInfo.AuthorizeRoleID = ""
 	}
 }
 
-// guildMemberAddHandler checks if the member is authorized or not
-// and sends the authorization instructions if not
-// NO LONGER USED DUE TO REACTION-BASED HANDLING
-func guildMemberAddHandler(bot *UsosBot, e *discordgo.GuildMemberAdd) {
-	log.Println("Member added")
-	authorized, err := bot.isAuthorized(e.Member)
-	if err != nil {
-		log.Println(err)
-	}
-
-	if !authorized {
-		err := bot.addUnauthorizedMember(e.Member)
-		if err != nil {
-			log.Println(err)
-		}
-	}
+func (bot *UsosBot) handlerMessageDelete(session *discordgo.Session, e *discordgo.MessageDelete) {
+	log.Println("Mesage deleted")
+	guildInfo := bot.getGuildUsosInfo(e.GuildID)
+	delete(guildInfo.AuthorizeMessegeIDs[e.ChannelID], e.Message.ID)
 }
 
-// guildCreateHandler performs a guildScan on a newly created guild
-// NO LONGER USED DUE TO REACTION-BASED HANDLING
-func guildCreateHandler(bot *UsosBot, e *discordgo.GuildCreate) {
+func (bot *UsosBot) handlerGuildDelete(session *discordgo.Session, e *discordgo.GuildDelete) {
+	log.Println("Guild deleted")
+	delete(bot.guildUsosInfos, e.Guild.ID)
+}
+
+func (bot *UsosBot) handlerGuildCreate(session *discordgo.Session, e *discordgo.GuildCreate) {
 	log.Println("Guild created")
-	err := bot.scanGuild(e.Guild.ID)
-	if err != nil {
-		log.Println(err)
+	guildInfo := bot.getGuildUsosInfo(e.Guild.ID)
+
+	// clean deleted authorize message ids
+	for channelID, messageMap := range guildInfo.AuthorizeMessegeIDs {
+		for messageID := range messageMap {
+			_, err := bot.ChannelMessage(channelID, messageID)
+			if err != nil {
+				if IsNotFound(err) {
+					delete(messageMap, messageID)
+				} else {
+					log.Println(err)
+				}
+			}
+		}
+		if len(messageMap) == 0 {
+			delete(guildInfo.AuthorizeMessegeIDs, channelID)
+		}
 	}
+
+	// clean authorize role
+	if guildInfo.AuthorizeRoleID != "" {
+		_, err := bot.guildRole(e.Guild.ID, guildInfo.AuthorizeRoleID)
+		if err != nil {
+			if IsNotFound(err) {
+				guildInfo.AuthorizeRoleID = ""
+			} else {
+				log.Println(err)
+			}
+		}
+	}
+
+	// clean log channels
+	for logChannelID := range guildInfo.LogChannelIDs {
+		_, err := bot.Channel(logChannelID)
+		if err != nil {
+			if IsNotFound(err) {
+				delete(guildInfo.LogChannelIDs, logChannelID)
+			} else {
+				log.Println(err)
+			}
+		}
+	}
+
+	log.Println("Guild cleaned")
+
 }
 
 //#endregion

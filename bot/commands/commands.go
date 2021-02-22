@@ -124,6 +124,8 @@ func (parser *DiscordParser) Handle(e *discordgo.MessageCreate) error {
 			if err != nil {
 				return err
 			}
+		} else {
+			log.Println(handleErr)
 		}
 		return handleErr
 	}

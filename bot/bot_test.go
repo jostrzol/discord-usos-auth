@@ -26,12 +26,14 @@ func TestExportImportSettings(t *testing.T) {
 				},
 			},
 		},
-		authorizeMessegeIDs: map[string]bool{
-			"messageID1": true,
-			"messageID2": true,
-		},
 		guildUsosInfos: map[string]*guildUsosInfo{
 			"guilID": {
+				AuthorizeMessegeIDs: map[string]map[string]bool{
+					"channelID": {
+						"messageID1": true,
+						"messageID2": true,
+					},
+				},
 				AuthorizeRoleID: "authorizeRoleID",
 				LogChannelIDs: map[string]bool{
 					"logChannelID": true,
@@ -69,10 +71,6 @@ func TestExportImportSettings(t *testing.T) {
 	err = bot2.ImportSettings(file)
 	if err != nil {
 		t.Error(err)
-	}
-
-	if !reflect.DeepEqual(bot2.authorizeMessegeIDs, bot.authorizeMessegeIDs) {
-		t.Errorf("AuthorizeMessageIDs do not match")
 	}
 
 	if !reflect.DeepEqual(bot2.guildUsosInfos, bot.guildUsosInfos) {

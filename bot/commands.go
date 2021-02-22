@@ -26,7 +26,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 			Help:    "custom prompt on the message",
 			Default: "React to this message to get authorized!"})
 	authMsgCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
-		err := bot.spawnAuthorizeMessage(e.ChannelID, *prompt)
+		err := bot.spawnAuthorizeMessage(e.GuildID, e.ChannelID, *prompt)
 		if err != nil {
 			return commands.NewErrHandler(err, true)
 		}
@@ -48,7 +48,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		if *abort {
 			err := bot.removeUnauthorizedUser(e.Author.ID)
 			switch err.(type) {
-			case *ErrAlreadyUnregisteredUser:
+			case *ErrUnregisteredUserNotFound:
 				return commands.NewErrHandler(err, true)
 			case nil:
 				_, err = bot.ChannelMessageSend(e.ChannelID, "Authorization abort successful")
@@ -67,7 +67,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		}
 		err := bot.finalizeAuthorization(e.Author, *verifier)
 		switch err.(type) {
-		case *ErrUnregisteredUnauthorizedUser, *ErrFilteredOut, *usos.ErrUnableToCall, *ErrRoleNotInGuild, *ErrWrongVerifier:
+		case *ErrUnregisteredUnauthorizedUser, *ErrFilteredOut, *usos.ErrUnableToCall, *ErrRoleNotFound, *ErrWrongVerifier:
 			return commands.NewErrHandler(err, true)
 		case nil:
 			return nil
@@ -128,8 +128,11 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		}
 		channels := make([]*discordgo.Channel, 0, len(guildInfo.LogChannelIDs))
 		for channelID := range guildInfo.LogChannelIDs {
-			channel, err := bot.Channel(channelID)
+			channel, err := bot.getLogChannel(e.GuildID, channelID)
 			if err != nil {
+				if IsNotFound(err) {
+					continue
+				}
 				return commands.NewErrHandler(err, false)
 			}
 			channels = append(channels, channel)
@@ -138,11 +141,11 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		if err != nil {
 			return commands.NewErrHandler(err, false)
 		}
-		msg := fmt.Sprintf("%s's log channels:\n", guild.Name)
+		msg := fmt.Sprintf("%s's log channels:", utils.DiscordBold(guild.Name))
 		for i, channel := range channels {
-			msg += fmt.Sprintf("\t%d. %s#%s\n", i+1, channel.Name, channel.ID)
+			msg += "\n" + utils.DiscordCodeSpan(fmt.Sprintf("%d. %s#%s", i+1, channel.Name, channel.ID))
 		}
-		_, err = bot.ChannelMessageSend(e.ChannelID, utils.DiscordCodeBlock(msg, ""))
+		_, err = bot.ChannelMessageSend(e.ChannelID, msg)
 		if err != nil {
 			return commands.NewErrHandler(err, false)
 		}
@@ -176,7 +179,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 			}
 		}
 
-		err = newErrRoleNotInGuild(*roleID, e.GuildID)
+		err = newErrRoleNotFound(*roleID, e.GuildID)
 		return commands.NewErrHandler(err, true)
 	}
 
@@ -192,7 +195,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		Help: "Programme names which the user is required too have (all) to pass."})
 	addFilterCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
 		if len(*programmes) == 0 {
-			return commands.NewErrHandler(newErrEmptyFilter(), true)
+			return commands.NewErrHandler(newErrFilterEmpty(), true)
 		}
 
 		usosProrammes := make([]usos.Programme, len(*programmes))
@@ -220,7 +223,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	removeFilterCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
 		guildInfo := bot.getGuildUsosInfo(e.GuildID)
 		if *removeFilterID < 1 || *removeFilterID > len(guildInfo.Filters) {
-			commands.NewErrHandler(newErrNoSuchFilter(*removeFilterID), true)
+			return commands.NewErrHandler(newErrFilterNotFound(*removeFilterID), true)
 		}
 		guildInfo.Filters = append(guildInfo.Filters[:*removeFilterID-1], guildInfo.Filters[*removeFilterID:]...)
 
@@ -248,16 +251,15 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 			return commands.NewErrHandler(err, false)
 		}
 
-		msg := fmt.Sprintf("%s's Filters:", guild.Name)
+		msg := fmt.Sprintf("%s's Filters:", utils.DiscordBold(guild.Name))
 		for i, filter := range guildInfo.Filters {
-			msg += fmt.Sprintf("\n%d.\n", i+1)
 			body, err := json.MarshalIndent(filter, "", "    ")
 			if err != nil {
 				return commands.NewErrHandler(err, false)
 			}
-			msg += string(body)
+			msg += utils.DiscordCodeBlock(fmt.Sprintf("\n%d. %s", i+1, string(body)), "")
 		}
-		_, err = bot.ChannelMessageSend(e.ChannelID, utils.DiscordCodeBlock(msg, ""))
+		_, err = bot.ChannelMessageSend(e.ChannelID, msg)
 		if err != nil {
 			return commands.NewErrHandler(err, false)
 		}

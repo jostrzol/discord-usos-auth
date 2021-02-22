@@ -8,17 +8,17 @@ import (
 
 // Programme represents an usos group
 type Programme struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	ID          string `json:"id,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // User represents an usos user
 type User struct {
-	ID         string      `json:"id"`
-	FirstName  string      `json:"first_name"`
-	LastName   string      `json:"last_name"`
-	Programmes []Programme `json:"student_programmes"`
+	ID         string      `json:"id,omitempty"`
+	FirstName  string      `json:"first_name,omitempty"`
+	LastName   string      `json:"last_name,omitempty"`
+	Programmes []Programme `json:"student_programmes,omitempty"`
 }
 
 type tmpDescription struct {

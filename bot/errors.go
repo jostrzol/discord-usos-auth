@@ -1,16 +1,18 @@
 package bot
 
-// ErrAlreadyUnregisteredUser represtents failure in aborting an authorization of non-registered unauthorized user
-type ErrAlreadyUnregisteredUser struct {
+import "github.com/bwmarrin/discordgo"
+
+// ErrUnregisteredUserNotFound represtents failure in aborting an authorization of non-registered unauthorized user
+type ErrUnregisteredUserNotFound struct {
 	UserID string
 }
 
-func newErrAlreadyUnregisteredUser(UserID string) *ErrAlreadyUnregisteredUser {
-	return &ErrAlreadyUnregisteredUser{
+func newErrUnregisteredUserNotFound(UserID string) *ErrUnregisteredUserNotFound {
+	return &ErrUnregisteredUserNotFound{
 		UserID: UserID,
 	}
 }
-func (e *ErrAlreadyUnregisteredUser) Error() string {
+func (e *ErrUnregisteredUserNotFound) Error() string {
 	return "You were not registered for authorization."
 }
 
@@ -78,87 +80,119 @@ func (e *ErrAlreadyRegistered) Error() string {
 	return "User was already registered for authorization"
 }
 
-// ErrLogChannelAlreadyAdded represtents failure in adding a new log channel, because it was added before
-type ErrLogChannelAlreadyAdded struct {
-	ChannelID string
-}
-
-func newErrLogChannelAlreadyAdded(ChannelID string) *ErrLogChannelAlreadyAdded {
-	return &ErrLogChannelAlreadyAdded{
-		ChannelID: ChannelID,
-	}
-}
-func (e *ErrLogChannelAlreadyAdded) Error() string {
-	return "This log channel is already added"
-}
-
-// ErrLogChannelNotAdded represtents failure in removing a log channel, because it was not in the log channel list anyway
-type ErrLogChannelNotAdded struct {
-	ChannelID string
-}
-
-func newErrLogChannelNotAdded(ChannelID string) *ErrLogChannelNotAdded {
-	return &ErrLogChannelNotAdded{
-		ChannelID: ChannelID,
-	}
-}
-func (e *ErrLogChannelNotAdded) Error() string {
-	return "This log channel is not on the log channel list"
-}
-
-// ErrLogChannelNotInGuild represtents failure in adding a new log channel due to it not belonging to the server
-type ErrLogChannelNotInGuild struct {
+// ErrLogChannelPresent represtents failure in adding a new log channel, because it was added before
+type ErrLogChannelPresent struct {
 	ChannelID string
 	GuildID   string
 }
 
-func newErrLogChannelNotInGuild(ChannelID string, GuildID string) *ErrLogChannelNotInGuild {
-	return &ErrLogChannelNotInGuild{
+func newErrLogChannelPresent(ChannelID string, GuildID string) *ErrLogChannelPresent {
+	return &ErrLogChannelPresent{
 		ChannelID: ChannelID,
 		GuildID:   GuildID,
 	}
 }
-func (e *ErrLogChannelNotInGuild) Error() string {
-	return "Ths log channel does not belog to the server"
+func (e *ErrLogChannelPresent) Error() string {
+	return "This log channel is already present on this server"
 }
 
-// ErrRoleNotInGuild represtents failure in setting a role to one outside of guild
-type ErrRoleNotInGuild struct {
+// ErrLogChannelNotFound represtents an error in attempt to get a log channel which does not belong to the server
+type ErrLogChannelNotFound struct {
+	ChannelID string
+	GuildID   string
+}
+
+func newErrLogChannelNotFound(ChannelID string, GuildID string) *ErrLogChannelNotFound {
+	return &ErrLogChannelNotFound{
+		ChannelID: ChannelID,
+		GuildID:   GuildID,
+	}
+}
+func (e *ErrLogChannelNotFound) Error() string {
+	return "This log channel does not belog to the server"
+}
+
+// ErrChannelNotFound represtents an error in attempt to get a non-existant channel
+type ErrChannelNotFound struct {
+	error
+	ChannelID string
+}
+
+func newErrChannelNotFound(cause error, ChannelID string) *ErrChannelNotFound {
+	return &ErrChannelNotFound{
+		error:     cause,
+		ChannelID: ChannelID,
+	}
+}
+func (e *ErrChannelNotFound) Error() string {
+	return "This channel does not exit"
+}
+
+// ErrAuthorizeRoleNotFound represtents failure in an attempt to get an authorize role
+// that does not have one registered
+type ErrAuthorizeRoleNotFound struct {
+	GuildID string
+}
+
+func newErrAuthorizeRoleNotFound(GuildID string) *ErrAuthorizeRoleNotFound {
+	return &ErrAuthorizeRoleNotFound{
+		GuildID: GuildID,
+	}
+}
+func (e *ErrAuthorizeRoleNotFound) Error() string {
+	return "This server does not have an authorize role registered"
+}
+
+// ErrRoleNotFound represtents failure in attempt to get a role that does not exist on a server
+type ErrRoleNotFound struct {
 	RoleID  string
 	GuildID string
 }
 
-func newErrRoleNotInGuild(RoleID string, GuildID string) *ErrRoleNotInGuild {
-	return &ErrRoleNotInGuild{
+func newErrRoleNotFound(RoleID string, GuildID string) *ErrRoleNotFound {
+	return &ErrRoleNotFound{
 		RoleID:  RoleID,
 		GuildID: GuildID,
 	}
 }
-func (e *ErrRoleNotInGuild) Error() string {
+func (e *ErrRoleNotFound) Error() string {
 	return "This role does not belong to this server"
 }
 
-// ErrEmptyFilter represtents failure in setting a filter to an empty one
-type ErrEmptyFilter struct{}
+// ErrFilterEmpty represtents failure in setting a filter to an empty one
+type ErrFilterEmpty struct{}
 
-func newErrEmptyFilter() *ErrEmptyFilter {
-	return &ErrEmptyFilter{}
+func newErrFilterEmpty() *ErrFilterEmpty {
+	return &ErrFilterEmpty{}
 }
 
-func (e *ErrEmptyFilter) Error() string {
+func (e *ErrFilterEmpty) Error() string {
 	return "This filter is empty"
 }
 
-// ErrNoSuchFilter represtents failure in removing a non-existant filter
-type ErrNoSuchFilter struct {
+// ErrFilterNotFound represtents failure in removing a non-existant filter
+type ErrFilterNotFound struct {
 	ID int
 }
 
-func newErrNoSuchFilter(ID int) *ErrNoSuchFilter {
-	return &ErrNoSuchFilter{
+func newErrFilterNotFound(ID int) *ErrFilterNotFound {
+	return &ErrFilterNotFound{
 		ID: ID,
 	}
 }
-func (e *ErrNoSuchFilter) Error() string {
+func (e *ErrFilterNotFound) Error() string {
 	return "No filter with such ID specified."
+}
+
+// IsNotFound checks if given error is a not found error (on discordgo package and this package)
+func IsNotFound(err error) bool {
+	switch err.(type) {
+	case *ErrChannelNotFound, *ErrLogChannelNotFound, *ErrRoleNotFound, *ErrAuthorizeRoleNotFound:
+		return true
+	case *discordgo.RESTError:
+		code := err.(*discordgo.RESTError).Response.StatusCode
+		return code == 404
+	default:
+		return false
+	}
 }
