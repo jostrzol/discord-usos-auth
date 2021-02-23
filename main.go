@@ -9,6 +9,7 @@ import (
 
 	"github.com/Ogurczak/discord-usos-auth/bot"
 	"github.com/akamensky/argparse"
+	"github.com/dghubble/oauth1"
 )
 
 var programmeName *string
@@ -28,6 +29,8 @@ func init() {
 		log.Fatal(err)
 	}
 }
+
+var token *oauth1.Token
 
 func main() {
 	// if token == nil {

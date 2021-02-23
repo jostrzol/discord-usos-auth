@@ -29,12 +29,15 @@ func usosURL(key string) string {
 	var baseURL = "https://apps.usos.pw.edu.pl/"
 
 	var urls = map[string]string{
-		"":             "",
-		"requestToken": "services/oauth/request_token",
-		"authorize":    "services/oauth/authorize",
-		"accessToken":  "services/oauth/access_token",
-		"user":         "services/users/user?fields=%s",
-		"groups":       "services/groups/user?fields=%s&active_terms=%s",
+		"":              "",
+		"requestToken":  "services/oauth/request_token",
+		"authorize":     "services/oauth/authorize",
+		"accessToken":   "services/oauth/access_token",
+		"user":          "services/users/user?fields=%s",
+		"groups":        "services/groups/user?fields=%s&active_terms=%s",
+		"registrations": "services/registrations/user_registrations?fields=%s",
+		"term":          "services/terms/term?term_id=%s",
+		"courses":       "services/courses/user?fields=%s",
 	}
 	return baseURL + urls[key]
 }
@@ -79,7 +82,7 @@ func NewRequestToken() (*RequestToken, error) {
 	return &RequestToken{token, secret, authorizationURL}, nil
 }
 
-func makeCall(client *http.Client, key string, a ...interface{}) ([]byte, error) {
+func makeCall(client *http.Client, verbose bool, key string, a ...interface{}) ([]byte, error) {
 	url := fmt.Sprintf(usosURL(key), a...)
 	resp, err := client.Get(url)
 	if err != nil {
@@ -88,5 +91,8 @@ func makeCall(client *http.Client, key string, a ...interface{}) ([]byte, error)
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
+	if verbose {
+		fmt.Println("Response body: ", string(body))
+	}
 	return body, err
 }
