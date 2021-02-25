@@ -1,5 +1,5 @@
 .vscode
-accessToken.txt
+accessToken*.txt
 discord-usos-auth
 __debug_bin
 *.json

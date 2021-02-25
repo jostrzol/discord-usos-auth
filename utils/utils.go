@@ -59,7 +59,25 @@ func FilterRec(filter interface{}, value interface{}) (bool, error) {
 					return false, nil
 				}
 			}
-			return true, nil
+		case reflect.Map:
+			for iter := f.Field(i).MapRange(); iter.Next(); {
+				fVal := iter.Value()
+				vVal := v.Field(i).MapIndex(iter.Key())
+
+				if fVal.IsZero() {
+					continue
+				}
+				if vVal == reflect.ValueOf(nil) {
+					return false, nil
+				}
+				match, err := FilterRec(fVal.Interface(), vVal.Interface())
+				if err != nil {
+					return false, err
+				}
+				if !match {
+					return false, nil
+				}
+			}
 		default:
 			if !f.Field(i).IsZero() && f.Field(i).Interface() != v.Field(i).Interface() {
 				return false, nil

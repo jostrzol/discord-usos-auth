@@ -42,7 +42,7 @@ func TestExportImportSettings(t *testing.T) {
 					{ID: "ID",
 						FirstName: "Witold",
 						LastName:  "Wysota",
-						Programmes: []usos.Programme{
+						Programmes: []*usos.Programme{
 							{ID: "ID",
 								Name:        "name",
 								Description: "Description"},

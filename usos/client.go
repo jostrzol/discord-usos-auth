@@ -1,7 +1,9 @@
 package usos
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -23,6 +25,22 @@ func newErrUnableToCall(cause error) *ErrUnableToCall {
 
 func (e *ErrUnableToCall) Error() string {
 	return "Error during calling an usos-api method"
+}
+
+// ErrHTTP represtents a HTTP error
+type ErrHTTP struct {
+	Code    int
+	Message string
+}
+
+func newErrHTTP(Code int, Message string) *ErrHTTP {
+	return &ErrHTTP{
+		Code:    Code,
+		Message: Message,
+	}
+}
+func (e *ErrHTTP) Error() string {
+	return e.Message
 }
 
 func usosURL(key string) string {
@@ -82,17 +100,25 @@ func NewRequestToken() (*RequestToken, error) {
 	return &RequestToken{token, secret, authorizationURL}, nil
 }
 
-func makeCall(client *http.Client, verbose bool, key string, a ...interface{}) ([]byte, error) {
+func makeCall(client *http.Client, key string, a ...interface{}) (io.ReadCloser, error) {
 	url := fmt.Sprintf(usosURL(key), a...)
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, newErrUnableToCall(err)
 	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if verbose {
-		fmt.Println("Response body: ", string(body))
+	if resp.StatusCode != 200 {
+		return nil, newErrHTTP(resp.StatusCode, resp.Status)
 	}
-	return body, err
+
+	return resp.Body, err
+}
+
+func printResponse(r *io.Reader) error {
+	dat, err := ioutil.ReadAll(*r)
+	if err != nil {
+		return err
+	}
+	*r = bytes.NewReader(dat)
+	fmt.Println("Response: ", string(dat))
+	return nil
 }

@@ -198,9 +198,9 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 			return commands.NewErrHandler(newErrFilterEmpty(), true)
 		}
 
-		usosProrammes := make([]usos.Programme, len(*programmes))
+		usosProrammes := make([]*usos.Programme, len(*programmes))
 		for i, programme := range *programmes {
-			usosProrammes[i] = usos.Programme{Name: programme}
+			usosProrammes[i] = &usos.Programme{Name: programme}
 		}
 
 		filter := &usos.User{
