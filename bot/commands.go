@@ -193,8 +193,10 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 	addFilterCmd := filterCmd.NewCommand("add", "add usos filter; user has to pass at least one of the filters to get past the authorization successfully")
 	programmes := addFilterCmd.StringList("p", "programme", &argparse.Options{Required: false,
 		Help: "Programme names which the user is required too have (all) to pass."})
+	courses := addFilterCmd.StringList("c", "course", &argparse.Options{Required: false,
+		Help: "Course IDs which the user is required too have (all) to pass."})
 	addFilterCmd.Handler = func(cmd *commands.DiscordCommand, e *discordgo.MessageCreate) *commands.ErrHandler {
-		if len(*programmes) == 0 {
+		if len(*programmes) == 0 && len(*courses) == 0 {
 			return commands.NewErrHandler(newErrFilterEmpty(), true)
 		}
 
@@ -202,9 +204,14 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		for i, programme := range *programmes {
 			usosProrammes[i] = &usos.Programme{Name: programme}
 		}
+		usosCourses := make([]*usos.Course, len(*courses))
+		for i, course := range *courses {
+			usosCourses[i] = &usos.Course{ID: course}
+		}
 
 		filter := &usos.User{
 			Programmes: usosProrammes,
+			Courses:    usosCourses,
 		}
 
 		guildInfo := bot.getGuildUsosInfo(e.GuildID)

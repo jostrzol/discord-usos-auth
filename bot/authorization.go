@@ -202,7 +202,10 @@ func (bot *UsosBot) finalizeAuthorization(user *discordgo.User, verifier string)
 		//no-op
 	default:
 		return err
-
+	}
+	_, err = usosUser.GetCourses(true)
+	if err != nil {
+		return err
 	}
 
 	message, err := json.MarshalIndent(usosUser, "", "    ")

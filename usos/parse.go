@@ -95,7 +95,7 @@ func parseCoursesResponse(activeOnly bool, resp io.Reader) ([]*Course, error) {
 		return nil, err
 	}
 
-	return nil, nil
+	return courses, nil
 }
 
 func multilangToPLHookFunc(f reflect.Kind, t reflect.Kind, data interface{}) (interface{}, error) {
@@ -140,7 +140,7 @@ func sliceToMapInterfaceHookFunc(idKey string) func(f reflect.Value, t reflect.V
 
 func editionsActiveHookFunc(activeOnly bool, terms map[string]*Term) func(f reflect.Kind, t reflect.Kind, data interface{}) (interface{}, error) {
 	return func(f reflect.Kind, t reflect.Kind, data interface{}) (interface{}, error) {
-		if !(f == reflect.Map && t == reflect.Map) {
+		if !(f == reflect.Map && t == reflect.Slice) {
 			return data, nil
 		}
 		m, ok := data.(map[string]interface{})
