@@ -54,6 +54,7 @@ func New(Token string) (*UsosBot, error) {
 	bot.AddHandler(bot.handlerReactionAdd)
 
 	bot.AddHandler(bot.handlerGuildMemberRemove)
+	bot.AddHandler(bot.handlerMessageDelete)
 	bot.AddHandler(bot.handlerGuildRoleDelete)
 	bot.AddHandler(bot.handlerChannelDelete)
 	bot.AddHandler(bot.handlerGuildDelete)

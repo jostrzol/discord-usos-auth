@@ -52,7 +52,7 @@ func usosURL(key string) string {
 		"authorize":     "services/oauth/authorize",
 		"accessToken":   "services/oauth/access_token",
 		"user":          "services/users/user?fields=%s",
-		"groups":        "services/groups/user?fields=%s&active_terms=%s",
+		"groups":        "services/groups/user?fields=%s&active_terms=%v",
 		"registrations": "services/registrations/user_registrations?fields=%s",
 		"term":          "services/terms/term?term_id=%s",
 		"courses":       "services/courses/user?fields=%s",

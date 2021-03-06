@@ -83,3 +83,27 @@ func (u *User) GetCourses(activeOnly bool) ([]*Course, error) {
 	u.Courses = courses
 	return courses, nil
 }
+
+// GetCoursesLight returns and assigns his currently active courses to the user,
+// does not download unneeded information
+func (u *User) GetCoursesLight(activeOnly bool) ([]*Course, error) {
+	client := u.client()
+	resp, err := makeCall(client, "groups", "course_id|term_id|course_name", activeOnly)
+	defer resp.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	courses, err := parseGroupsResponseToCourses(activeOnly, resp)
+	if err != nil {
+		return nil, err
+	}
+
+	u.Courses = courses
+	// dat, err := ioutil.ReadAll(resp)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// fmt.Print(string(dat))
+	return courses, nil
+}

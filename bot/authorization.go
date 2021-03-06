@@ -203,7 +203,7 @@ func (bot *UsosBot) finalizeAuthorization(user *discordgo.User, verifier string)
 	default:
 		return err
 	}
-	_, err = usosUser.GetCourses(true)
+	_, err = usosUser.GetCoursesLight(true)
 	if err != nil {
 		return err
 	}

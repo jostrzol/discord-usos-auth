@@ -83,7 +83,9 @@ func (bot *UsosBot) handlerReactionAdd(session *discordgo.Session, e *discordgo.
 		if !authorized {
 			err = bot.addUnauthorizedMember(member)
 			switch err.(type) {
-			case *ErrAlreadyRegistered, nil:
+			case *ErrAlreadyRegistered:
+				bot.privMsgDiscord(e.UserID, "Already registered for verification")
+			case nil:
 				// no-op
 			default:
 				log.Println(err)

@@ -60,16 +60,8 @@ func parseCoursesResponse(activeOnly bool, resp io.Reader) ([]*Course, error) {
 		return nil, err
 	}
 
-	dateHookFunc := mapstructure.StringToTimeHookFunc("2006-01-02")
-	termHookFunc := mapstructure.ComposeDecodeHookFunc(
-		sliceToMapInterfaceHookFunc("id"),
-		multilangToPLHookFunc,
-		dateHookFunc)
 	terms := make(map[string]*Term)
-	decoderTerm, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		DecodeHook: termHookFunc,
-		Result:     &terms,
-	})
+	decoderTerm, err := termDecoder(&terms)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +88,69 @@ func parseCoursesResponse(activeOnly bool, resp io.Reader) ([]*Course, error) {
 	}
 
 	return courses, nil
+}
+
+func parseGroupsResponseToCourses(activeOnly bool, resp io.Reader) ([]*Course, error) {
+	jParsed := make(map[string]interface{})
+	dat, err := ioutil.ReadAll(resp)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(dat, &jParsed)
+	if err != nil {
+		return nil, err
+	}
+
+	terms := make(map[string]*Term)
+	decoderTerm, err := termDecoder(&terms)
+	if err != nil {
+		return nil, err
+	}
+	err = decoderTerm.Decode(jParsed["terms"])
+	if err != nil {
+		return nil, err
+	}
+
+	courseHookFunc := mapstructure.ComposeDecodeHookFunc(
+		editionsActiveHookFunc(activeOnly, terms),
+		sliceToMapInterfaceHookFunc("course_id"),
+		multilangToPLHookFunc)
+	// to map because there are duplicates i want to get rid off (e.g. there are lecture and lab groups of the same course)
+	courses := make(map[string]*Course)
+	decoderCourse, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: courseHookFunc,
+		Result:     &courses,
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = decoderCourse.Decode(jParsed["groups"])
+	if err != nil {
+		return nil, err
+	}
+
+	// now convert back to slice
+	coursesSlice := make([]*Course, len(courses))
+	i := 0
+	for _, course := range courses {
+		coursesSlice[i] = course
+		i++
+	}
+
+	return coursesSlice, nil
+}
+
+func termDecoder(terms *map[string]*Term) (*mapstructure.Decoder, error) {
+	dateHookFunc := mapstructure.StringToTimeHookFunc("2006-01-02")
+	termHookFunc := mapstructure.ComposeDecodeHookFunc(
+		sliceToMapInterfaceHookFunc("id"),
+		multilangToPLHookFunc,
+		dateHookFunc)
+	decoderTerm, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: termHookFunc,
+		Result:     &terms,
+	})
+	return decoderTerm, err
 }
 
 func multilangToPLHookFunc(f reflect.Kind, t reflect.Kind, data interface{}) (interface{}, error) {
@@ -140,7 +195,7 @@ func sliceToMapInterfaceHookFunc(idKey string) func(f reflect.Value, t reflect.V
 
 func editionsActiveHookFunc(activeOnly bool, terms map[string]*Term) func(f reflect.Kind, t reflect.Kind, data interface{}) (interface{}, error) {
 	return func(f reflect.Kind, t reflect.Kind, data interface{}) (interface{}, error) {
-		if !(f == reflect.Map && t == reflect.Slice) {
+		if !(f == reflect.Map) {
 			return data, nil
 		}
 		m, ok := data.(map[string]interface{})
