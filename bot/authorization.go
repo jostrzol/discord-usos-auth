@@ -193,7 +193,7 @@ func (bot *UsosBot) authorizeWithToken(guildID string, user *discordgo.User, tok
 		return err
 	}
 
-	message, err := json.MarshalIndent(usosUser, "", "    ")
+	message, err := json.MarshalIndent(usosUser, "", "  ")
 	if err != nil {
 		return err
 	}

@@ -57,6 +57,7 @@ func (bot *UsosBot) handlerReady(session *discordgo.Session, e *discordgo.Ready)
 
 // handlerReactionAdd handles reactions added to bot's messages
 func (bot *UsosBot) handlerReactionAdd(session *discordgo.Session, e *discordgo.MessageReactionAdd) {
+	log.Println("Reaction add")
 	guildInfo := bot.getGuildUsosInfo(e.GuildID)
 	if guildInfo.AuthorizeMessegeIDs[e.ChannelID][e.MessageID] {
 		_, err := bot.ChannelMessage(e.ChannelID, e.MessageID)

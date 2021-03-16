@@ -264,7 +264,7 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 
 		msg := fmt.Sprintf("%s's Filters:", utils.DiscordBold(guild.Name))
 		for i, filter := range guildInfo.Filters {
-			body, err := json.MarshalIndent(filter, "", "    ")
+			body, err := json.MarshalIndent(filter, "", "  ")
 			if err != nil {
 				return commands.NewErrHandler(err, false)
 			}

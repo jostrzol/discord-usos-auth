@@ -13,7 +13,7 @@ type snippet struct {
 }
 
 func fragmentMsg(text *string) []string {
-	*text = strings.ReplaceAll(*text, "\t", "    ") // discord counts tabs as 4 spaces, so must replace for accurate counting
+	*text = strings.ReplaceAll(*text, "\t", "  ") // discord counts tabs as 2 spaces, so must replace for accurate counting
 
 	codeSnippetSign := "```"
 	codeSnippets := make([]snippet, 0)
