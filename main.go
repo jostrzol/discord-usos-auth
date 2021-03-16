@@ -81,45 +81,7 @@ func main() {
 			}
 		}
 
-		defer func() {
-			exists := true
-			_, err := os.Stat(*settingsFilename)
-			if err != nil {
-				if os.IsNotExist(err) {
-					exists = false
-				} else {
-					log.Fatal(err)
-				}
-			}
-
-			if !*force && exists {
-				fmt.Printf("\nOverwrite file \"%s\"? [y/N]\n", *settingsFilename)
-
-				correct := false
-				for !correct {
-					var answer string
-					fmt.Scanln(&answer)
-					switch answer {
-					case "Y", "y":
-						correct = true
-					case "N", "n", "":
-						return
-					}
-				}
-			}
-			file, err := os.OpenFile(*settingsFilename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
-			if err != nil {
-				log.Fatal(err)
-			}
-			err = b.ExportSettings(file)
-			if err != nil {
-				log.Fatal(err)
-			}
-			err = file.Close()
-			if err != nil {
-				log.Fatal(err)
-			}
-		}()
+		defer exitFunc(b)()
 	}
 
 	err = b.Open()
@@ -133,4 +95,46 @@ func main() {
 	// time.Sleep(time.Second * 2)
 
 	b.Close()
+}
+
+func exitFunc(b *bot.UsosBot) func() {
+	return func() {
+		exists := true
+		_, err := os.Stat(*settingsFilename)
+		if err != nil {
+			if os.IsNotExist(err) {
+				exists = false
+			} else {
+				log.Fatal(err)
+			}
+		}
+
+		if !*force && exists {
+			fmt.Printf("\nOverwrite file \"%s\"? [y/N]\n", *settingsFilename)
+
+			correct := false
+			for !correct {
+				var answer string
+				fmt.Scanln(&answer)
+				switch answer {
+				case "Y", "y":
+					correct = true
+				case "N", "n", "":
+					return
+				}
+			}
+		}
+		file, err := os.OpenFile(*settingsFilename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = b.ExportSettings(file)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = file.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 }

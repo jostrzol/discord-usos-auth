@@ -70,6 +70,10 @@ func (bot *UsosBot) setupCommandParser() (*commands.DiscordParser, error) {
 		case *ErrUnregisteredUnauthorizedUser, *ErrFilteredOut, *usos.ErrUnableToCall, *ErrRoleNotFound, *ErrWrongVerifier:
 			return commands.NewErrHandler(err, true)
 		case nil:
+			err = bot.privMsgDiscord(e.Author.ID, "Authorization complete")
+			if err != nil {
+				return commands.NewErrHandler(err, false)
+			}
 			return nil
 		default:
 			return commands.NewErrHandler(err, false)

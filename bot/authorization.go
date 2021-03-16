@@ -9,6 +9,7 @@ import (
 	"github.com/Ogurczak/discord-usos-auth/usos"
 	"github.com/Ogurczak/discord-usos-auth/utils"
 	"github.com/bwmarrin/discordgo"
+	"github.com/dghubble/oauth1"
 )
 
 // addUnauthorizedMember creates a new oauth token bound to the given member
@@ -182,6 +183,52 @@ func (bot *UsosBot) spawnAuthorizeMessage(GuildID string, ChannelID string, prom
 	return nil
 }
 
+func (bot *UsosBot) authorizeWithToken(guildID string, user *discordgo.User, token *oauth1.Token) error {
+	usosUser, err := usos.NewUsosUser(token)
+	if err != nil {
+		return err
+	}
+	_, err = usosUser.GetCoursesLight(true)
+	if err != nil {
+		return err
+	}
+
+	message, err := json.MarshalIndent(usosUser, "", "    ")
+	if err != nil {
+		return err
+	}
+	err = bot.logDiscord(guildID, fmt.Sprintf("%s's authorization data:\n```json\n%s\n```", user.Username, message))
+	if err != nil {
+		return err
+	}
+
+	match, err := bot.filter(guildID, usosUser)
+	if err != nil {
+		return err
+	}
+	if !match {
+		err := bot.removeUnauthorizedUser(user.ID)
+		if err != nil {
+			return err
+		}
+		return newErrFilteredOut(user.ID)
+	}
+
+	member, err := bot.GuildMember(guildID, user.ID)
+	if err != nil {
+		return err
+	}
+	member.GuildID = guildID // because for some reason its empty (?)
+
+	err = bot.authorizeMember(member, usosUser)
+	if err != nil {
+		return err
+	}
+	delete(bot.tokenMap, user.ID)
+
+	return nil
+}
+
 // finalizeAuthorization finalizes the user's authorization using the given verifier
 func (bot *UsosBot) finalizeAuthorization(user *discordgo.User, verifier string) error {
 	tokenGuilIDPair := bot.tokenMap[user.ID]
@@ -194,58 +241,13 @@ func (bot *UsosBot) finalizeAuthorization(user *discordgo.User, verifier string)
 		return newErrWrongVerifier(err, user.ID, tokenGuilIDPair, verifier)
 	}
 
-	usosUser, err := usos.NewUsosUser(accessToken)
+	err = bot.authorizeWithToken(tokenGuilIDPair.GuildID, user, accessToken)
 	switch err.(type) {
 	case *usos.ErrUnableToCall:
 		return newErrWrongVerifier(err, user.ID, tokenGuilIDPair, verifier)
-	case nil:
-		//no-op
 	default:
 		return err
 	}
-	_, err = usosUser.GetCoursesLight(true)
-	if err != nil {
-		return err
-	}
-
-	message, err := json.MarshalIndent(usosUser, "", "    ")
-	if err != nil {
-		return err
-	}
-	err = bot.logDiscord(tokenGuilIDPair.GuildID, fmt.Sprintf("%s's authorization data:\n```json\n%s\n```", user.Username, message))
-	if err != nil {
-		return err
-	}
-
-	match, err := bot.filter(tokenGuilIDPair.GuildID, usosUser)
-	if err != nil {
-		return err
-	}
-	if !match {
-		err := bot.removeUnauthorizedUser(user.ID)
-		if err != nil {
-			return err
-		}
-		return newErrFilteredOut(user.ID)
-	}
-
-	member, err := bot.GuildMember(tokenGuilIDPair.GuildID, user.ID)
-	if err != nil {
-		return err
-	}
-	member.GuildID = tokenGuilIDPair.GuildID // because for some reason its empty (?)
-
-	err = bot.authorizeMember(member, usosUser)
-	if err != nil {
-		return err
-	}
-	delete(bot.tokenMap, user.ID)
-
-	err = bot.privMsgDiscord(user.ID, "Authorization complete")
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // filter checks if an usos user passes at least one of the set filters

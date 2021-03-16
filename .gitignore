@@ -7,3 +7,4 @@ usos/out
 usos/client_test.go
 usos/user_test.go
 usos/access_token.txt
+bot/authorization_test.go
