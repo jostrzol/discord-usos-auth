@@ -52,10 +52,10 @@ func NewUsosUser(token *oauth1.Token) (*User, error) {
 	client := config.Client(oauth1.NoContext, token)
 
 	resp, err := makeCall(client, "user", "id|first_name|last_name|student_programmes")
-	defer resp.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Close()
 
 	user, err := parseUserResponse(resp)
 	if err != nil {
@@ -73,12 +73,15 @@ func (u *User) client() *http.Client {
 func (u *User) GetCourses(activeOnly bool) ([]*Course, error) {
 	client := u.client()
 	resp, err := makeCall(client, "courses", "course_editions|terms")
-	defer resp.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Close()
 
 	courses, err := parseCoursesResponse(activeOnly, resp)
+	if err != nil {
+		return nil, err
+	}
 
 	u.Courses = courses
 	return courses, nil
@@ -89,10 +92,10 @@ func (u *User) GetCourses(activeOnly bool) ([]*Course, error) {
 func (u *User) GetCoursesLight(activeOnly bool) ([]*Course, error) {
 	client := u.client()
 	resp, err := makeCall(client, "groups", "course_id|term_id|course_name", activeOnly)
-	defer resp.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Close()
 
 	courses, err := parseGroupsResponseToCourses(activeOnly, resp)
 	if err != nil {

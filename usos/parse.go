@@ -32,7 +32,7 @@ func parseUserResponse(body io.Reader) (*User, error) {
 		return nil, err
 	}
 
-	json.Unmarshal(dat, &respUser)
+	err = json.Unmarshal(dat, &respUser)
 	if err != nil {
 		return nil, err
 	}
