@@ -1,0 +1,15 @@
+version: '3'
+services:
+  discord-usos-auth:
+    container_name: discord-usos-auth
+    build: .
+    volumes:
+      - settings:/etc/discord-usos-auth/config
+    environment:
+      - TOKEN=insert_token_here
+      - SETTINGS_FILE=/etc/discord-usos-auth/config/settings.json
+    restart: unless-stopped
+
+volumes:
+  settings:
+    driver: local
