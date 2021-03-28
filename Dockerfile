@@ -8,4 +8,4 @@ FROM alpine:3.13.3
 RUN apk add --no-cache ca-certificates
 WORKDIR /root/
 COPY --from=builder /go/src/discord-usos-auth/discord-usos-auth /root/
-ENTRYPOINT ["./discord-usos-auth", "-t", "$TOKEN", "-s", "${SETTINGS_FILE}" , "-f"]
+ENTRYPOINT ./discord-usos-auth -t ${TOKEN} -s ${SETTINGS_FILE} -f

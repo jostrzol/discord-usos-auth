@@ -1,6 +1,6 @@
 version: '3'
 services:
-  backend:
+  discord-usos-auth:
     container_name: discord-usos-auth
     build: .
     volumes:
